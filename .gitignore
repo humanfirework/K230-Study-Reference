@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# K230 specific
+cls_results/
+deploy_config.json
+det_results/
+
+# Build Artifacts (Keil/MDK/C)
+Objects/
+Listings/
+Debug/
+Release/
+*.o
+*.obj
+*.axf
+*.elf
+*.crf
+*.d
+*.dep
+*.map
+*.htm
+*.lnp
+*.sct
+*.pck
+
+# Images/Videos (collected data, keep dataset folders but ignore temp dumps)
+*.avi
+*.mp4
+
+# Keep specific example images if needed
+!Data/Number image/*.png
+!Data/dataset/**/*.jpg
+
+# System
+.DS_Store
+Thumbs.db

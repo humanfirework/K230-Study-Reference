@@ -1,0 +1,610 @@
+import gc
+import os
+import sys
+import time
+import math
+
+from math import *
+from media.sensor import * #导入sensor模块，使用摄像头相关接口
+from media.display import * #导入display模块，使用display相关接口
+from media.media import * #导入media模块，使用meida相关接口
+
+from machine import FPIOA
+from machine import Pin
+from machine import UART
+from machine import PWM
+
+sensor_id = 2
+picture_width = 800
+picture_height = 480
+DISPLAY_WIDTH = 800
+DISPLAY_HEIGHT = 480
+
+# 颜色识别阈值 (L Min, L Max, A Min, A Max, B Min, B Max) LAB模型
+# 下面的阈值元组是用来识别 红、绿、蓝三种颜色，当然你也可以调整让识别变得更好。
+Red_thresholds = (72, 99, -6, 46, -40, 25) # 红色阈值
+Green_thresholds = (30, 100, -64, -8, 50, 70)  # 绿色阈值（移除多余逗号）
+Blue_thresholds = (0, 40, 0, 90, -128, -20) # 蓝色阈值
+laser_threshold = (73, 100, -21, 58, -18, 25) # 激光阈值
+
+state = 0     #识别状态
+pencil_points = []  # 空列表  # 初始化5个点  #记入铅笔矩形坐标5个点
+# 设置追踪阈值
+TRACKING_THRESHOLD = 10  # 像素
+# 定义激光位置
+laser_x = 0
+laser_y = 0
+# 在检测到激光点后记录
+red_history = []
+green_history = []
+
+
+# 定义激光状态
+laser_detected = False
+# 定义追踪状态
+tracking = False
+
+fpioa = FPIOA()
+fpioa.help()
+# 初始化UART2
+fpioa.set_function(11, FPIOA.UART2_TXD)
+fpioa.set_function(12, FPIOA.UART2_RXD)
+uart2 = UART(UART.UART2, 115200)
+
+# 配置蜂鸣器IO口功能
+fpioa.set_function(43, FPIOA.PWM1)
+# 初始化蜂鸣器PWM通道
+beep_pwm = PWM(1, 4000, 50, enable=False)  # 默认频率4kHz,占空比50%
+
+# 创建按键对象，用于触发图像采集
+fpioa.set_function(53, FPIOA.GPIO53)  # 设置GPIO53功能
+KEY = Pin(53, Pin.IN, Pin.PULL_DOWN)  # GPIO53作为输入引脚，下拉模式
+
+#可以写在32上来解析数据包，发送可以按照这个格式写（问题：还不熟悉将数据填入列表，数组或元组之中）
+def Receive_date():
+    data = uart2.read()
+    if data:
+        print(data)
+        # 解析数据
+        if data.startswith("P"):
+            # 解析点的索引
+            point_index = int(data[1])
+            # 解析X坐标
+            x_start = data.index("X") + 1           #在 data 列表中查找"X"的位置索引并加1
+            x_end = data.index("Y")                 #在 data 列表中查找"Y"的位置索引这通常用于从类似"X123Y456"这样的字符串中提取"X"和"Y"之间的内容(123)
+            x_value = int(data[x_start:x_end])      #显示x坐标
+            # 解析Y坐标
+            y_start = data.index("Y") + 1           #在 data 列表中查找"Y"的位置索引并加1
+            y_end = data.index("\r")                #“\r“的位置为结束符”
+            y_value = int(data[y_start:y_end])
+            # 更新点的位置
+
+# 发送目标位置数据的函数
+# 参数x,y: 目标位置的x和y坐标值
+def send_target_data(x,y):
+    n = 0  # 计数器，用于记录发送次数
+
+    # 循环4次发送数据，提高传输可靠性
+    for i in range(4):
+        # 将x坐标分解为高8位和低8位
+        x_h = (x>>8)&0xFF  # 取x的高8位
+        x_l = x&0xFF       # 取x的低8位
+
+        # 将y坐标分解为高8位和低8位
+        y_h = (y>>8)&0xFF  # 取y的高8位
+        y_l = y&0xFF       # 取y的低8位
+
+        # 发送x坐标数据包
+        # 数据包格式: [0x55, 0xaa, 0xff, x_h, x_l, 0xfa]
+        # 0x55 0xaa: 数据包头
+        # 0xff: 表示这是x坐标数据
+        # x_h, x_l: x坐标的高低位
+        # 0xfa: 数据包尾
+        uart2.write(bytearray([0x55, 0xaa, 0xff, int(x_h)&0xFF, int(x_l)&0xFF, 0xfa]))
+
+        time.sleep_ms(3)  # 短暂延时，防止数据冲突
+        n += 1  # 计数器递增
+
+        # 发送y坐标数据包
+        # 数据包格式: [0x55, 0xaa, 0x00, y_h, y_l, 0xfa]
+        # 0x00: 表示这是y坐标数据
+        uart2.write(bytearray([0x55, 0xaa, 0x00, int(y_h)&0xFF, int(y_l)&0xFF, 0xfa]))
+
+        time.sleep_ms(3)  # 短暂延时
+        n += 1  # 计数器递增
+
+
+# 对矩形角点进行排序（左上、右上、右下、左下）
+def sort_rect_corners(corners):
+    if len(corners) != 4:
+        return corners
+
+    # 确保有4个角点
+    if len(corners) != 4:
+        print(f"警告: 检测到{len(corners)}个角点，预期4个")
+        return corners
+
+    # 优先按y坐标排序确定上下，再按x坐标排序确定左右
+    # 按y坐标升序排序，y值小的在前（图像坐标系中y向下为正）
+    sorted_by_y = sorted(corners, key=lambda p: p[1])
+
+    # 计算y值差异，确定合理的上下分类阈值
+    y_values = [p[1] for p in sorted_by_y]
+    y_diff = y_values[-1] - y_values[0]
+    threshold = max(10, int(y_diff * 0.2))  # 至少10像素或总高度的20%
+    print(f"y值范围: {y_values}, 差异: {y_diff}, 阈值: {threshold}")
+
+    # 基于阈值确定上下点（处理可能的y值接近情况）
+    if y_values[1] - y_values[0] > threshold:
+        # 第一个点明显高于其他点
+        top_points = [sorted_by_y[0]]
+        # 从剩余点中找次高点
+        remaining = sorted_by_y[1:]
+        next_top = min(remaining, key=lambda p: p[1])
+        top_points.append(next_top)
+        bottom_points = [p for p in remaining if p != next_top]
+    elif y_values[-1] - y_values[-2] > threshold:
+        # 最后一个点明显低于其他点
+        bottom_points = [sorted_by_y[-1]]
+        # 从剩余点中找次低点
+        remaining = sorted_by_y[:-1]
+        next_bottom = max(remaining, key=lambda p: p[1])
+        bottom_points.append(next_bottom)
+        top_points = [p for p in remaining if p != next_bottom]
+    else:
+        # 正常情况：取前两个为顶部，后两个为底部
+        top_points = sorted_by_y[:2]
+        bottom_points = sorted_by_y[2:]
+
+    # 确保顶部和底部各有两个点
+    if len(top_points) != 2 or len(bottom_points) != 2:
+        print(f"警告: 上下点分类异常 - 顶部{len(top_points)}个, 底部{len(bottom_points)}个")
+        top_points = sorted_by_y[:2]
+        bottom_points = sorted_by_y[2:]
+
+    # 顶部两点按x坐标排序，x小的为左上，x大的为右上
+    top_points_sorted = sorted(top_points, key=lambda p: p[0])
+    top_left, top_right = top_points_sorted
+
+    # 验证左上点确实是顶部点中y最小的
+    if top_left[1] > top_right[1] + 2:
+        print(f"调整: 交换左上和右上点 (y值差异: {top_left[1]-top_right[1]})")
+        top_left, top_right = top_right, top_left
+
+    # 底部两点按x坐标排序，x小的为左下，x大的为右下
+    bottom_points_sorted = sorted(bottom_points, key=lambda p: p[0])
+    bottom_left, bottom_right = bottom_points_sorted
+
+    # 详细调试输出排序过程
+    # print(f"原始角点: {corners}")
+    # print(f"按y排序后: {sorted_by_y} (y值: {[p[1] for p in sorted_by_y]})")
+    # print(f"顶部点(y较小): {top_points} (y值: {[p[1] for p in top_points]})")
+    # print(f"顶部排序后: 左上{top_left}, 右上{top_right} (x值: {[p[0] for p in top_points_sorted]})")
+    # print(f"底部点(y较大): {bottom_points} (y值: {[p[1] for p in bottom_points]})")
+    # print(f"底部排序后: 左下{bottom_left}, 右下{bottom_right} (x值: {[p[0] for p in bottom_points_sorted]})")
+
+    # 验证排序结果的有效性
+    if top_left[1] > top_right[1] + 5 or bottom_left[1] > bottom_right[1] + 5:
+        print(f"警告: 角点排序可能异常 - 顶部点y差: {abs(top_left[1]-top_right[1])}, 底部点y差: {abs(bottom_left[1]-bottom_right[1])}")
+
+    # 调试输出排序后的角点
+    print(f"排序后角点: 左上{top_left}, 右上{top_right}, 右下{bottom_right}, 左下{bottom_left}")
+    return [top_left, top_right, bottom_right, bottom_left]
+
+# 寻找面积最大的N个矩形
+def find_largest_rects(rects, count=2):
+    if not rects or count <= 0:
+        return []
+    # 按面积排序矩形
+    rects_with_area = []
+    for rect in rects:
+        x, y, w, h = rect.rect()
+        area = w * h
+        rects_with_area.append((area, rect))
+    # 降序排序并取前count个
+    rects_with_area.sort(reverse=True, key=lambda x: x[0])
+    return [rect for (area, rect) in rects_with_area[:count]]
+
+# 寻找最大色块面积的函数
+# 参数blobs: 检测到的所有色块列表
+def find_max_blob(blobs):
+    # 对色块列表按照周长进行降序排序
+    # 使用lambda函数获取每个色块的周长作为排序依据
+    blobs.sort(key=lambda x:x.perimeter(),reverse=True);
+    # 初始化一个空字典用于存储最大色块信息
+    max_value={}
+    # 获取排序后的第一个色块(周长最大的色块)
+    max_value=blobs[0];
+    # 返回最大色块
+    return max_value;
+
+
+
+try:
+
+    sensor = Sensor(id = sensor_id) #构建摄像头对象
+    sensor.reset() #复位和初始化摄像头
+    sensor.set_framesize(width = picture_width, height = picture_height) #设置帧大小为LCD分辨率()，默认通道0    （显示画面的大小）一般小
+    sensor.set_pixformat(Sensor.RGB565) #设置输出图像格式，默认通道0
+
+    Display.init(Display.VIRT, width = DISPLAY_WIDTH, height = DISPLAY_HEIGHT) #只使用IDE缓冲区显示图像      （画面大小）一般大
+
+    MediaManager.init() #初始化media资源管理器
+
+    sensor.run() #启动sensor
+
+    clock = time.clock()
+
+    rect_binart = (0, 20, -11, 5, -4, 10)
+    while True:
+        os.exitpoint()  # 退出点，用于调试
+        img = sensor.snapshot(chn = CAM_CHN_ID_0)  # 从摄像头通道0获取一帧图像
+
+        """
+        1.串口接收（可以直接写uart2.read()接收消息）
+        例如：
+        data = uart2.read()
+        if data == b'1':  # 接收到'1'时持续发送
+        """
+        #接收数据包0X“55 XX FF FF FF”
+        Rxbuf = bytearray(5)
+        Rx_NumBytes = uart2.readinto(Rxbuf, 5)
+        if Rx_NumBytes is not None and Rx_NumBytes == 5:
+            if (Rxbuf[0] == 0x55 and Rxbuf[2] == 0xFF and Rxbuf[3] == 0xFF and Rxbuf[4] == 0xFF):
+                if(Rxbuf[1] == 0x01): #定位激光点
+                    state = 1
+                    print("开始依次定位铅笔矩形框5个坐标点")
+                elif(Rxbuf[1] == 0x02): #开始寻找矩形
+                    state = 2
+                    print("开始校准激光")
+                elif(Rxbuf[1] == 0x03):
+                    state = 3
+                    print("开始识别矩形")
+                elif(Rxbuf[1] == 0x04):
+                    state = 4
+                    print("开始激光追踪")
+                elif(Rxbuf[1] == 0x00):
+                    state = 0
+                    print("停止")
+
+        img = sensor.snapshot(chn = CAM_CHN_ID_0)
+         #灰度图
+        img_rect = img.to_grayscale(copy = True)
+        #二制化
+        img_rect = img_rect.binary([rect_binart])
+
+
+        """2.定位5个铅笔矩形坐标点"""
+        if state == 1:
+            img.draw_string_advanced(0, 0, 20,"TAST:1", color=(0, 0, 0))
+            blobs = img.find_blobs([laser_threshold])
+            if blobs:
+                pixel = []
+                for B in blobs:
+                    pixel.append(B.pixels())
+                max_index = pixel.index(max(pixel))
+                B = blobs[max_index]
+                img.draw_rectangle(B[0:4])
+                img.draw_cross(B[5], B[6])
+            #定义按键，通过按键计入激光点的坐标
+                if KEY.value() == 1:
+                    time.sleep_ms(100)
+                    if KEY.value() == 1 and len(pencil_points) < 5:
+                        blobs = img.find_blobs([laser_threshold])
+                        if blobs:
+                            pixel = []
+                            for B in blobs:
+                                pixel.append(B.pixels())
+                            max_index = pixel.index(max(pixel))
+                            B = blobs[max_index]
+                            img.draw_rectangle(B[0:4])
+                            img.draw_cross(B[5], B[6])
+                            pencil_points.append([B[5], B[6]])
+                            print(f"已记录第{len(pencil_points)}个点坐标:", B[5], B[6])
+                            # 显示已记录的点
+
+                        else:
+                            print("未检测到激光点")
+                    elif len(pencil_points) >= 5:
+                        print("已记录5个点，请停止采集")
+                # 发送数据
+            for i in range(len(pencil_points)):
+                img.draw_cross(pencil_points[i][0], pencil_points[i][1])
+
+
+        """2.校准激光"""
+        if state == 2:   # 接收到‘2’时持续发送
+            img.draw_string_advanced(0, 0, 20,"TAST:2", color=(0, 0, 0))
+            img = sensor.snapshot(chn = CAM_CHN_ID_0)  # 每次循环都获取新帧
+            blobs = img.find_blobs(Red_thresholds)  # 重新检测色块 （可添加阈值，识别不同颜色）
+            if blobs:
+                pixel = []
+                for B in blobs:
+                    pixel.append(B.pixels())
+                max_index = pixel.index(max(pixel))
+                B = blobs[max_index]
+                img.draw_rectangle(B[0:4])
+                img.draw_cross(B[5], B[6])
+                #C=img.get_pixel(B[5], B[6])  # 获取中心点像素颜色值
+
+                Display.show_image(img)
+                time.sleep_ms(10)  # 添加短暂延迟避免连续发送
+                laser_x = B.x() + round(B.w()/2)
+                laser_y = B.y() + round(B.h()/2)
+
+        target_rect_corners = []
+        """3.寻找矩形"""
+        if state == 3:
+            img.draw_string_advanced(0, 0, 20,"TAST:3", color=(0, 0, 0))
+            count = 0  # 初始化矩形计数器
+            rects = img_rect.find_rects(threshold = 10000)
+            # 筛选面积最大的两个矩形
+            largest_rects = find_largest_rects(rects, count=2)
+            detected_rects = []
+            rect1_corners = []
+            rect2_corners = []
+            print("------矩形统计开始------")
+
+            # 处理第一个矩形
+            if len(largest_rects) >= 1:
+                rect1 = largest_rects[0]
+                rect1_corners = sort_rect_corners(rect1.corners())
+                detected_rects.append(rect1_corners)
+                print(f"矩形1角点(已排序): {rect1_corners}")
+                # 绘制第一个矩形
+                img.draw_line(rect1_corners[0][0], rect1_corners[0][1], rect1_corners[1][0], rect1_corners[1][1], color=(255, 0, 0), thickness=2)
+                img.draw_line(rect1_corners[1][0], rect1_corners[1][1], rect1_corners[2][0], rect1_corners[2][1], color=(255, 0, 0), thickness=2)
+                img.draw_line(rect1_corners[2][0], rect1_corners[2][1], rect1_corners[3][0], rect1_corners[3][1], color=(255, 0, 0), thickness=2)
+                img.draw_line(rect1_corners[3][0], rect1_corners[3][1], rect1_corners[0][0], rect1_corners[0][1], color=(255, 0, 0), thickness=2)
+
+            # 处理第二个矩形
+            if len(largest_rects) >= 2:
+                rect2 = largest_rects[1]
+                rect2_corners = sort_rect_corners(rect2.corners())
+                detected_rects.append(rect2_corners)
+                print(f"矩形2角点(已排序): {rect2_corners}")
+                # 绘制第二个矩形
+                img.draw_line(rect2_corners[0][0], rect2_corners[0][1], rect2_corners[1][0], rect2_corners[1][1], color=(0, 0, 255), thickness=2)
+                img.draw_line(rect2_corners[1][0], rect2_corners[1][1], rect2_corners[2][0], rect2_corners[2][1], color=(0, 0, 255), thickness=2)
+                img.draw_line(rect2_corners[2][0], rect2_corners[2][1], rect2_corners[3][0], rect2_corners[3][1], color=(0, 0, 255), thickness=2)
+                img.draw_line(rect2_corners[3][0], rect2_corners[3][1], rect2_corners[0][0], rect2_corners[0][1], color=(0, 0, 255), thickness=2)
+
+            count = len(detected_rects)
+            print(f"共检测到{count}个有效矩形")
+
+            if count >= 2 and len(rect1_corners) == 4 and len(rect2_corners) == 4:
+                    # 计算两个矩形对应角点的中点作为目标矩形角点
+                    target_rect_corners = []
+                    for i in range(4):
+                        # 计算x坐标中点
+                        mid_x = int((rect1_corners[i][0] + rect2_corners[i][0]) / 2)
+                        # 计算y坐标中点
+                        mid_y = int((rect1_corners[i][1] + rect2_corners[i][1]) / 2)
+                        target_rect_corners.append([mid_x, mid_y])
+
+                    #计算目标矩形4个点
+                    # 计算目标矩形四个角点（取两个矩形对应角点的中点）
+                    target_rect_corners[0][0] = int((rect1_corners[0][0] + rect2_corners[0][0]) / 2)
+                    target_rect_corners[0][1] = int((rect1_corners[0][1] + rect2_corners[0][1]) / 2)
+
+                    target_rect_corners[1][0] = int((rect1_corners[1][0] + rect2_corners[1][0]) / 2)
+                    target_rect_corners[1][1] = int((rect1_corners[1][1] + rect2_corners[1][1]) / 2)
+
+                    target_rect_corners[2][0] = int((rect1_corners[2][0] + rect2_corners[2][0]) / 2)
+                    target_rect_corners[2][1] = int((rect1_corners[2][1] + rect2_corners[2][1]) / 2)
+
+                    target_rect_corners[3][0] = int((rect1_corners[3][0] + rect2_corners[3][0]) / 2)
+                    target_rect_corners[3][1] = int((rect1_corners[3][1] + rect2_corners[3][1]) / 2)
+
+                    #画目标矩形
+                    img.draw_line(target_rect_corners[0][0], target_rect_corners[0][1], target_rect_corners[1][0], target_rect_corners[1][1], color = (0, 255, 0), thickness = 3)
+                    img.draw_line(target_rect_corners[2][0], target_rect_corners[2][1], target_rect_corners[1][0], target_rect_corners[1][1], color = (0, 255, 0), thickness = 3)
+                    img.draw_line(target_rect_corners[2][0], target_rect_corners[2][1], target_rect_corners[3][0], target_rect_corners[3][1], color = (0, 255, 0), thickness = 3)
+                    img.draw_line(target_rect_corners[0][0], target_rect_corners[0][1], target_rect_corners[3][0], target_rect_corners[3][1], color = (0, 255, 0), thickness = 3)
+
+            print("---------END---------")
+
+
+        """4.激光追踪"""
+        if state == 4:
+            img.draw_string_advanced(0, 0, 20,"TAST:4", color=(0, 0, 0))
+            tracking_complete = False
+            start_time = time.time()
+
+            while time.time() - start_time < 2 and not tracking_complete:
+                img = sensor.snapshot(chn=CAM_CHN_ID_0)
+
+                # 检测红色光斑
+                red_blobs = img.find_blobs(Red_thresholds)
+                red_blob = max(red_blobs, key=lambda b: b.pixels()) if red_blobs else None
+
+                # 检测绿色光斑
+                green_blobs = img.find_blobs(Green_thresholds)
+                green_blob = max(green_blobs, key=lambda b: b.pixels()) if green_blobs else None
+
+                if red_blob and green_blob:
+                    # 确保光斑面积足够大，过滤噪声
+                    if red_blob.pixels() < 5 or green_blob.pixels() < 5:
+                        print("光斑面积过小，可能为噪声")
+                        continue
+                    # 获取中心坐标
+                    red_x, red_y = red_blob.cx(), red_blob.cy()
+                    green_x, green_y = green_blob.cx(), green_blob.cy()
+
+                    # 计算距离 (像素)
+                    distance = math.sqrt((red_x - green_x)**2 + (red_y - green_y)** 2)
+
+                    # 像素转厘米 (根据实际校准，此处为示例值)
+                    # 校准方法: 测量实际10cm距离对应的像素数，更新以下比例
+                    PIXEL_PER_CM = 12.5  # 示例值：1cm = 12.5像素
+                    distance_cm = distance / PIXEL_PER_CM       #（我觉得并不标准）
+
+                    # 绘制光斑和距离
+                    img.draw_cross(red_x, red_y, color=(255, 0, 0))
+                    img.draw_cross(green_x, green_y, color=(0, 255, 0))
+                    img.draw_line(red_x, red_y, green_x, green_y, color=(255, 255, 0))
+                    img.draw_string_advanced(10, 30, 16, f"距离:{distance_cm:.1f}cm", color=(0,0,0))
+
+                    if distance_cm > 3:
+                        # 简单比例控制
+                        move_x = int((red_x - green_x) * 0.5)
+                        move_y = int((red_y - green_y) * 0.5)
+                        new_green_x = green_x + move_x
+                        new_green_y = green_y + move_y
+                        # 限制最大移动速度，避免超调
+                        max_step = 20  # 最大单步移动像素
+                        move_x = max(-max_step, min(max_step, move_x))
+                        move_y = max(-max_step, min(max_step, move_y))
+                        new_green_x = green_x + move_x
+                        new_green_y = green_y + move_y
+                        # 使用uart2发送数据（修复端口错误）
+                        send_target_data(new_green_x, new_green_y)
+                    else:
+                        tracking_complete = True
+
+                Display.show_image(img, x=int((DISPLAY_WIDTH - picture_width)/2), y=int((DISPLAY_HEIGHT - picture_height)/2))
+                time.sleep_ms(50)
+
+            if tracking_complete:
+                print("追踪完成: 距离≤3cm")
+                beep_pwm.freq(1000)
+                beep_pwm.enable(True)
+                time.sleep_ms(100)
+                beep_pwm.enable(False)
+            else:
+                print("追踪超时")
+
+        """串口发送"""
+        if (state == 1 or state == 2 or state == 3):
+            # 发送数据
+            if state == 1:
+                # 发送所有点数据，格式为: !数量X1Y1X2Y2...XnYn@
+                data_str = "!" + ",".join([f"{p[0]},{p[1]}" for p in pencil_points]) + "@"
+                 # 通过串口发送数据
+                uart2.write(f"{data_str}\n")
+                print(f"已发送数据: 状态={state}, 数据={data_str}")
+
+            elif state == 2:
+                uart2.write('!' + str(laser_x) + ',' + str(laser_y) + '@')
+                print(f"发送数据: 状态={state}, X={laser_x}, Y={laser_y}")
+
+            elif state == 3:
+                data = "!"
+                for corner in target_rect_corners:
+                    data += "X" + str(corner[0]) + "Y" + str(corner[1])
+                data += "@"
+                uart2.write(data)
+                print(f"发送数据: 状态={state}, 数据={data}")
+
+
+        Display.show_image(img, x = int((DISPLAY_WIDTH - picture_width) / 2), y = int((DISPLAY_HEIGHT - picture_height) / 2))
+
+
+###################
+# IDE中断释放资源代码
+###################
+except KeyboardInterrupt as e:
+    print("user stop: ", e)
+except BaseException as e:
+    print(f"Exception {e}")
+finally:
+    # sensor stop run
+    if isinstance(sensor, Sensor):
+        sensor.stop()
+    # deinit display
+    Display.deinit()
+    os.exitpoint(os.EXITPOINT_ENABLE_SLEEP)
+    time.sleep_ms(100)
+    # release media buffer
+    MediaManager.deinit()
+
+
+
+
+
+# 激光追踪函数
+# 持续检测红色激光和绿色激光的位置，并计算两者之间的距离和方向
+def laser_track():
+    loop = True
+    while loop:  # 持续循环检测
+        img = sensor.snapshot(chn = CAM_CHN_ID_0)  # 从摄像头通道0获取一帧图像
+
+        # 检测红色激光
+        red_blobs = img.find_blobs(Red_thresholds)  # 使用红色阈值检测红色激光点
+        if red_blobs:  # 如果检测到红色激光
+            red_pixels = [b.pixels() for b in red_blobs]  # 获取每个红色区域的像素数量
+            max_red = red_blobs[red_pixels.index(max(red_pixels))]  # 找到像素最多的红色区域
+            red_x = max_red.x() + round(max_red.w()/2)  # 计算红色激光中心点x坐标
+            red_y = max_red.y() + round(max_red.h()/2)  # 计算红色激光中心点y坐标
+            img.draw_cross(red_x, red_y, color=(255,0,0))  # 在图像上绘制红色十字标记
+
+        # 检测绿色激光
+        green_blobs = img.find_blobs(Green_thresholds)  # 使用绿色阈值检测绿色激光点
+        if green_blobs:  # 如果检测到绿色激光
+            green_pixels = [b.pixels() for b in green_blobs]  # 获取每个绿色区域的像素数量
+            max_green = green_blobs[green_pixels.index(max(green_pixels))]  # 找到像素最多的绿色区域
+            green_x = max_green.x() + round(max_green.w()/2)  # 计算绿色激光中心点x坐标
+            green_y = max_green.y() + round(max_green.h()/2)  # 计算绿色激光中心点y坐标
+            img.draw_cross(green_x, green_y, color=(0,255,0))  # 在图像上绘制绿色十字标记
+
+        # 计算距离和方向
+        dx = green_x - red_x  # x方向距离差
+        dy = green_y - red_y  # y方向距离差
+        distance = (dx**2 + dy**2)**0.5  # 计算两点之间的欧几里得距离
+
+        # 绘制追踪线
+        img.draw_line(red_x, red_y, green_x, green_y, color=(255,255,0))  # 用黄色线条连接两点
+        # 计算角度
+        angle = math.atan2(dy, dx)  # 计算角度（弧度）
+        angle_deg = math.degrees(angle)  # 将弧度转换为角度
+        # 显示距离和角度
+        img.draw_string(red_x, red_y, "Dist: {:.2f}mm".format(distance), color=(255, 255, 0))
+        img.draw_string(red_x, red_y + 20, "Angle: {:.2f}deg".format(angle_deg), color=(255, 255, 0))
+
+        # 更新激光位置
+        laser_x = red_x  # 更新全局变量laser_x
+        laser_y = red_y  # 更新全局变量laser_y
+
+        # 在检测到激光点后记录
+        red_history.append((red_x, red_y))
+        green_history.append((green_x, green_y))
+
+        # 保持最近100个点
+        if len(red_history) > 100:
+            red_history.pop(0)
+            green_history.pop(0)
+
+        # 计算绿色激光的平均移动向量
+        if len(green_history) > 1:
+            last_green = green_history[-2]
+            green_move_x = green_x - last_green[0]
+            green_move_y = green_y - last_green[1]
+            # 预测下一个位置
+            predicted_x = green_x + green_move_x
+            predicted_y = green_y + green_move_y
+
+        # 绘制历史轨迹
+        for i in range(1, len(red_history)):
+            img.draw_line(red_history[i-1][0], red_history[i-1][1],
+                        red_history[i][0], red_history[i][1],
+                        color=(255,0,0))
+            img.draw_line(green_history[i-1][0], green_history[i-1][1],
+                        green_history[i][0], green_history[i][1],
+                        color=(0,255,0))
+
+        if distance > TRACKING_THRESHOLD:
+            # 需要移动红色激光
+            move_x = dx * 0.5  # 移动比例为距离的一半
+            move_y = dy * 0.5
+            # 发送移动指令
+            uart2.write(f'MOVE {move_x} {move_y}\n')
+        # 发送数据
+        uart2.write("L" + str(laser_x) + "Y" + str(laser_y) + "A" + str(angle_deg) + "\r\n")  # 发送激光位置数据
+
+
+
+
+
+
+
+

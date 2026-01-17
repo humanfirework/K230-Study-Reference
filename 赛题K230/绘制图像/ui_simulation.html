@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K230 UI界面仿真</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .device-frame {
+            width: 800px;
+            height: 480px;
+            background: #000;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .screen {
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .main-content {
+            display: flex;
+            height: calc(100% - 60px);
+        }
+
+        .camera-view {
+            flex: 2;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .camera-feed {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #2c3e50, #3498db);
+            position: relative;
+        }
+
+        .detection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .detection-box {
+            position: absolute;
+            border: 2px solid #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        .control-panel {
+            flex: 1;
+            background: #2c2c2c;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            background: #3a3a3a;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .section-title {
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+        }
+
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .task-card {
+            background: #4a4a4a;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .task-card:hover {
+            background: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .task-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .task-name {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: white;
+        }
+        
+        .task-desc {
+            font-size: 10px;
+            color: #aaa;
+        }
+        
+        .task-card:hover .task-desc {
+            color: #eee;
+        }
+
+        .slider-group {
+            margin-bottom: 15px;
+        }
+
+        .slider-label {
+            color: #ccc;
+            font-size: 12px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .slider {
+            width: 100%;
+            height: 5px;
+            border-radius: 5px;
+            background: #555;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .info-display {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .info-item {
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .touch-indicator {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            display: none;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .pulse {
+            animation: pulse 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="device-frame">
+        <div class="screen">
+            <div class="header">K230 机器视觉调试界面</div>
+            
+            <div class="main-content">
+                <div class="camera-view">
+                    <div class="camera-feed" id="cameraFeed">
+                        <div class="detection-overlay" id="detectionOverlay"></div>
+                    </div>
+                </div>
+                
+                <div class="control-panel">
+                    <div class="section">
+                        <div class="section-title">识别模式</div>
+                        <div class="task-grid">
+                            <div class="task-card" onclick="runTask('color')">
+                                <div class="task-icon">🎯</div>
+                                <div class="task-name">颜色追踪</div>
+                                <div class="task-desc">实时颜色识别与追踪</div>
+                            </div>
+                            
+                            <div class="task-card" onclick="runTask('rect')">
+                                <div class="task-icon">⬜</div>
+                                <div class="task-name">矩形识别</div>
+                                <div class="task-desc">检测画面中的矩形区域</div>
+                            </div>
+                            
+                            <div class="task-card" onclick="runTask('circle')">
+                                <div class="task-icon">⭕</div>
+                                <div class="task-name">圆形检测</div>
+                                <div class="task-desc">识别圆形和椭圆形状</div>
+                            </div>
+                            
+                            <div class="task-card" onclick="runTask('line')">
+                                <div class="task-icon">📏</div>
+                                <div class="task-name">线段识别</div>
+                                <div class="task-desc">检测直线和边缘</div>
+                            </div>
+                            
+                            <div class="task-card" onclick="runTask('apriltag')">
+                            <div class="task-icon">🏷️</div>
+                            <div class="task-name">AprilTag</div>
+                            <div class="task-desc">识别AprilTag标记</div>
+                        </div>
+                        
+                        <div class="task-card" onclick="runTask('threshold')">
+                            <div class="task-icon">⚙️</div>
+                            <div class="task-name">阈值调节</div>
+                            <div class="task-desc">调整识别参数</div>
+                        </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">阈值调节</div>
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>L阈值</span>
+                                <span id="lValue">0</span>
+                            </div>
+                            <input type="range" class="slider" id="lSlider" min="0" max="255" value="0">
+                        </div>
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>A阈值</span>
+                                <span id="aValue">127</span>
+                            </div>
+                            <input type="range" class="slider" id="aSlider" min="0" max="255" value="127">
+                        </div>
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>B阈值</span>
+                                <span id="bValue">127</span>
+                            </div>
+                            <input type="range" class="slider" id="bSlider" min="0" max="255" value="127">
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">实时数据</div>
+                        <div class="info-display">
+                            <div class="info-item">模式: <span id="currentMode">颜色追踪</span></div>
+                            <div class="info-item">FPS: <span id="fpsValue">30</span></div>
+                            <div class="info-item">识别数: <span id="detectCount">0</span></div>
+                            <div class="info-item">坐标: <span id="coordinates">--</span></div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">系统工具</div>
+                        <div class="mode-buttons">
+                            <button class="mode-btn" onclick="takeScreenshot()">截图</button>
+                            <button class="mode-btn" onclick="saveConfig()">保存配置</button>
+                            <button class="mode-btn" onclick="resetConfig()">重置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <span>K230 机器视觉系统</span>
+                <span id="systemTime">00:00:00</span>
+            </div>
+
+            <div class="touch-indicator" id="touchIndicator"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'color';
+        let detectionBoxes = [];
+        let fps = 30;
+        let detectCount = 0;
+
+        // 任务切换
+        function runTask(taskName) {
+            if (taskName === 'threshold') {
+                showThresholdConfig();
+                return;
+            }
+            
+            currentMode = taskName;
+            document.getElementById('currentMode').textContent = {
+                color: '颜色追踪',
+                rect: '矩形识别',
+                circle: '圆形识别',
+                line: '线段识别',
+                apriltag: 'AprilTag'
+            }[taskName];
+            
+            updateDetection();
+        }
+
+        function showThresholdConfig() {
+            const modal = document.createElement('div');
+            modal.id = 'thresholdModal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;
+            `;
+            
+            const config = {
+                'red_point': {
+                    name: '红点识别(LAB)',
+                    values: [85, 100, -18, 50, -18, 51],
+                    labels: ['L最小', 'L最大', 'A最小', 'A最大', 'B最小', 'B最大'],
+                    ranges: [[0, 100], [0, 100], [-128, 127], [-128, 127], [-128, 127], [-128, 127]]
+                },
+                'gray_rect': {
+                    name: '矩形识别(灰度)',
+                    values: [82, 212],
+                    labels: ['最小值', '最大值'],
+                    ranges: [[0, 255], [0, 255]]
+                }
+            };
+            
+            let currentMode = 'red_point';
+            let currentValues = [...config[currentMode].values];
+            
+            function renderModal() {
+                const modeConfig = config[currentMode];
+                
+                modal.innerHTML = `
+                    <div class="threshold-modal" style="
+                        background: #2a2a2a; border-radius: 10px; padding: 30px; min-width: 600px; max-width: 90vw;
+                        color: white; font-family: Arial, sans-serif;">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0; color: #00ff00;">${modeConfig.name}</h3>
+                            <button onclick="closeThresholdModal()" style="
+                                background: #ff4444; color: white; border: none; border-radius: 5px; 
+                                padding: 5px 15px; cursor: pointer;">关闭</button>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <h4 style="color: #ffaa00; margin-bottom: 15px;">阈值调节</h4>
+                                ${modeConfig.labels.map((label, index) => `
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; margin-bottom: 5px; font-size: 14px;">
+                                            ${label}: <span style="color: #00ffff;">${currentValues[index]}</span>
+                                        </label>
+                                        <input type="range" 
+                                            min="${modeConfig.ranges[index][0]}" 
+                                            max="${modeConfig.ranges[index][1]}" 
+                                            value="${currentValues[index]}"
+                                            oninput="updateThresholdValue(${index}, this.value)"
+                                            style="width: 100%; height: 5px; border-radius: 5px; background: #555;">
+                                    </div>
+                                `).join('')}
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                    <button onclick="switchThresholdMode()" style="
+                                        flex: 1; padding: 10px; background: #007bff; 
+                                        color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                        切换模式
+                                    </button>
+                                    <button onclick="resetThresholdValues()" style="
+                                        flex: 1; padding: 10px; background: #ffaa00; 
+                                        color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                        重置
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h4 style="color: #ffaa00; margin-bottom: 15px;">实时预览</h4>
+                                <div style="
+                                    width: 100%; height: 200px; background: #111; 
+                                    border: 2px solid #555; border-radius: 5px;
+                                    display: flex; align-items: center; justify-content: center;">
+                                    <canvas id="thresholdPreview" width="240" height="180" 
+                                        style="border: 1px solid #333; background: #000;"></canvas>
+                                </div>
+                                
+                                <button onclick="saveThresholdValues()" style="
+                                    width: 100%; padding: 12px; margin-top: 15px; 
+                                    background: #28a745; color: white; 
+                                    border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                                    保存设置
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                updateThresholdPreview();
+            }
+            
+            window.updateThresholdValue = function(index, value) {
+                currentValues[index] = parseInt(value);
+                renderModal();
+            };
+            
+            window.switchThresholdMode = function() {
+                const modes = Object.keys(config);
+                const currentIndex = modes.indexOf(currentMode);
+                currentMode = modes[(currentIndex + 1) % modes.length];
+                currentValues = [...config[currentMode].values];
+                renderModal();
+            };
+            
+            window.resetThresholdValues = function() {
+                currentValues = [...config[currentMode].values];
+                renderModal();
+            };
+            
+            window.saveThresholdValues = function() {
+                localStorage.setItem('thresholdConfig', JSON.stringify({
+                    red_point: config.red_point.values,
+                    gray_rect: config.gray_rect.values
+                }));
+                alert('阈值设置已保存！');
+                closeThresholdModal();
+            };
+            
+            window.updateThresholdPreview = function() {
+                const canvas = document.getElementById('thresholdPreview');
+                if (!canvas) return;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const imgData = ctx.createImageData(canvas.width, canvas.height);
+                const data = imgData.data;
+                
+                if (currentMode === 'red_point') {
+                    for (let i = 0; i < data.length; i += 4) {
+                        const red = Math.random() * 255;
+                        if (red > currentValues[0] && red < currentValues[1]) {
+                            data[i] = 255; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255;
+                        } else {
+                            data[i+3] = 0;
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < data.length; i += 4) {
+                        const gray = Math.random() * 255;
+                        if (gray > currentValues[0] && gray < currentValues[1]) {
+                            data[i] = gray; data[i+1] = gray; data[i+2] = gray; data[i+3] = 255;
+                        } else {
+                            data[i+3] = 0;
+                        }
+                    }
+                }
+                
+                ctx.putImageData(imgData, 0, 0);
+                
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    const x = Math.random() * (canvas.width - 40) + 20;
+                    const y = Math.random() * (canvas.height - 40) + 20;
+                    const w = Math.random() * 60 + 20;
+                    const h = Math.random() * 60 + 20;
+                    ctx.strokeRect(x, y, w, h);
+                }
+            };
+            
+            renderModal();
+            document.body.appendChild(modal);
+        }
+
+        function closeThresholdModal() {
+            const modal = document.getElementById('thresholdModal');
+            if (modal) modal.remove();
+            delete window.updateThresholdValue;
+            delete window.switchThresholdMode;
+            delete window.resetThresholdValues;
+            delete window.saveThresholdValues;
+            delete window.updateThresholdPreview;
+        }
+
+        // 滑块事件
+        ['lSlider', 'aSlider', 'bSlider'].forEach(sliderId => {
+            const slider = document.getElementById(sliderId);
+            const valueSpan = document.getElementById(sliderId.replace('Slider', 'Value'));
+            
+            slider.addEventListener('input', function() {
+                valueSpan.textContent = this.value;
+                updateDetection();
+            });
+        });
+
+        // 触摸仿真
+        document.addEventListener('click', function(e) {
+            const indicator = document.getElementById('touchIndicator');
+            indicator.style.left = e.clientX - 10 + 'px';
+            indicator.style.top = e.clientY - 10 + 'px';
+            indicator.style.display = 'block';
+            indicator.classList.add('pulse');
+            
+            setTimeout(() => {
+                indicator.style.display = 'none';
+                indicator.classList.remove('pulse');
+            }, 500);
+        });
+
+        // 更新检测框
+        function updateDetection() {
+            const overlay = document.getElementById('detectionOverlay');
+            overlay.innerHTML = '';
+            
+            // 模拟不同模式的检测效果
+            const modes = {
+                color: generateColorDetections,
+                rect: generateRectDetections,
+                circle: generateCircleDetections,
+                line: generateLineDetections,
+                apriltag: generateAprilTagDetections
+            };
+            
+            if (modes[currentMode]) {
+                modes[currentMode]();
+            }
+            
+            detectCount = Math.floor(Math.random() * 5) + 1;
+            document.getElementById('detectCount').textContent = detectCount;
+            
+            const x = Math.floor(Math.random() * 300) + 50;
+            const y = Math.floor(Math.random() * 200) + 50;
+            document.getElementById('coordinates').textContent = `(${x}, ${y})`;
+        }
+
+        function generateColorDetections() {
+            for (let i = 0; i < 3; i++) {
+                const box = document.createElement('div');
+                box.className = 'detection-box';
+                box.style.left = Math.random() * 70 + '%';
+                box.style.top = Math.random() * 70 + '%';
+                box.style.width = Math.random() * 50 + 20 + 'px';
+                box.style.height = Math.random() * 50 + 20 + 'px';
+                box.style.borderColor = '#ff0000';
+                document.getElementById('detectionOverlay').appendChild(box);
+            }
+        }
+
+        function generateRectDetections() {
+            const box = document.createElement('div');
+            box.className = 'detection-box';
+            box.style.left = '30%';
+            box.style.top = '30%';
+            box.style.width = '100px';
+            box.style.height = '60px';
+            box.style.borderColor = '#00ff00';
+            document.getElementById('detectionOverlay').appendChild(box);
+        }
+
+        function generateCircleDetections() {
+            const box = document.createElement('div');
+            box.className = 'detection-box';
+            box.style.left = '50%';
+            box.style.top = '40%';
+            box.style.width = '80px';
+            box.style.height = '80px';
+            box.style.borderRadius = '50%';
+            box.style.borderColor = '#0000ff';
+            document.getElementById('detectionOverlay').appendChild(box);
+        }
+
+        function generateLineDetections() {
+            const line = document.createElement('div');
+            line.style.position = 'absolute';
+            line.style.left = '10%';
+            line.style.top = '50%';
+            line.style.width = '80%';
+            line.style.height = '2px';
+            line.style.background = '#ffff00';
+            line.style.transform = 'rotate(' + (Math.random() * 60 - 30) + 'deg)';
+            document.getElementById('detectionOverlay').appendChild(line);
+        }
+
+        function generateAprilTagDetections() {
+            const box = document.createElement('div');
+            box.className = 'detection-box';
+            box.style.left = '40%';
+            box.style.top = '35%';
+            box.style.width = '60px';
+            box.style.height = '60px';
+            box.style.borderColor = '#ff00ff';
+            document.getElementById('detectionOverlay').appendChild(box);
+        }
+
+        // 系统工具功能
+        function takeScreenshot() {
+            alert('截图已保存');
+        }
+
+        function saveConfig() {
+            const config = {
+                mode: currentMode,
+                thresholds: {
+                    l: document.getElementById('lSlider').value,
+                    a: document.getElementById('aSlider').value,
+                    b: document.getElementById('bSlider').value
+                }
+            };
+            localStorage.setItem('k230_config', JSON.stringify(config));
+            alert('配置已保存');
+        }
+
+        function resetConfig() {
+            document.getElementById('lSlider').value = 0;
+            document.getElementById('aSlider').value = 127;
+            document.getElementById('bSlider').value = 127;
+            document.getElementById('lValue').textContent = '0';
+            document.getElementById('aValue').textContent = '127';
+            document.getElementById('bValue').textContent = '127';
+            updateDetection();
+        }
+
+        // 更新时间
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            document.getElementById('systemTime').textContent = timeStr;
+        }
+
+        // 模拟FPS变化
+        setInterval(() => {
+            fps = Math.floor(Math.random() * 10) + 25;
+            document.getElementById('fpsValue').textContent = fps;
+        }, 1000);
+
+        // 初始化
+        setInterval(updateTime, 1000);
+        updateTime();
+        updateDetection();
+
+        // 加载保存的配置
+        const savedConfig = localStorage.getItem('k230_config');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            document.getElementById('lSlider').value = config.thresholds.l;
+            document.getElementById('aSlider').value = config.thresholds.a;
+            document.getElementById('bSlider').value = config.thresholds.b;
+            document.getElementById('lValue').textContent = config.thresholds.l;
+            document.getElementById('aValue').textContent = config.thresholds.a;
+            document.getElementById('bValue').textContent = config.thresholds.b;
+            
+            // 设置当前模式显示
+            document.getElementById('currentMode').textContent = {
+                color: '颜色追踪',
+                rect: '矩形识别',
+                circle: '圆形识别',
+                line: '线段识别',
+                apriltag: 'AprilTag',
+                threshold: '阈值调节'
+            }[config.mode] || '颜色追踪';
+        }
+    </script>
+</body>
+</html>

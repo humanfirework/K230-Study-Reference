@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K230 颜色巡线仿真</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .simulation-area {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .camera-view {
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        #canvas {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #90EE90 100%);
+        }
+        .track-line {
+            position: absolute;
+            height: 30px;
+            background: #000;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: left 0.1s ease;
+        }
+        .robot {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            background: #ff4444;
+            border-radius: 5px;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: left 0.1s ease;
+        }
+        .robot::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: #00ff00;
+            left: 50%;
+            top: -10px;
+            transform: translateX(-50%);
+        }
+        .control-panel {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .control-section {
+            margin-bottom: 20px;
+        }
+        .control-section h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        .parameter {
+            margin: 10px 0;
+        }
+        .parameter label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        .parameter input {
+            width: 100%;
+            padding: 5px;
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 3px;
+        }
+        .color-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .color-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #fff;
+            font-weight: bold;
+        }
+        .color-btn.active {
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        .black { background: #000; }
+        .green { background: #00ff00; }
+        .red { background: #ff0000; }
+        .blue { background: #0000ff; }
+        .status-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .status-card {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .status-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .serial-output {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 150px;
+            overflow-y: auto;
+            color: #0f0;
+        }
+        .start-btn {
+            width: 100%;
+            padding: 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .start-btn:hover {
+            background: #45a049;
+        }
+        .start-btn.stop {
+            background: #f44336;
+        }
+        .start-btn.stop:hover {
+            background: #da190b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>K230 颜色巡线仿真系统</h1>
+            <p>模拟真实K230颜色巡线工作流程</p>
+        </div>
+
+        <div class="simulation-area">
+            <div class="camera-view">
+                <canvas id="canvas" width="800" height="400"></canvas>
+                <div class="robot" id="robot"></div>
+            </div>
+
+            <div class="control-panel">
+                <div class="control-section">
+                    <h3>颜色选择</h3>
+                    <div class="color-selector">
+                        <button class="color-btn black active" onclick="setColor(0)">黑色</button>
+                        <button class="color-btn green" onclick="setColor(1)">绿色</button>
+                        <button class="color-btn red" onclick="setColor(2)">红色</button>
+                        <button class="color-btn blue" onclick="setColor(3)">蓝色</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>PID参数</h3>
+                    <div class="parameter">
+                        <label>KP: <span id="kp-value">1.2</span></label>
+                        <input type="range" id="kp" min="0" max="5" step="0.1" value="1.2">
+                    </div>
+                    <div class="parameter">
+                        <label>KI: <span id="ki-value">0.1</span></label>
+                        <input type="range" id="ki" min="0" max="1" step="0.01" value="0.1">
+                    </div>
+                    <div class="parameter">
+                        <label>KD: <span id="kd-value">0.3</span></label>
+                        <input type="range" id="kd" min="0" max="1" step="0.01" value="0.3">
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>基础速度</h3>
+                    <div class="parameter">
+                        <label>速度: <span id="speed-value">400</span></label>
+                        <input type="range" id="base-speed" min="0" max="1000" step="10" value="400">
+                    </div>
+                </div>
+
+                <button class="start-btn" id="startBtn" onclick="toggleSimulation()">开始仿真</button>
+            </div>
+        </div>
+
+        <div class="status-display">
+            <div class="status-card">
+                <h4>目标位置</h4>
+                <div class="status-value" id="target-pos">400</div>
+            </div>
+            <div class="status-card">
+                <h4>当前位置</h4>
+                <div class="status-value" id="current-pos">400</div>
+            </div>
+            <div class="status-card">
+                <h4>误差</h4>
+                <div class="status-value" id="error">0</div>
+            </div>
+            <div class="status-card">
+                <h4>左轮速度</h4>
+                <div class="status-value" id="left-speed">400</div>
+            </div>
+            <div class="status-card">
+                <h4>右轮速度</h4>
+                <div class="status-value" id="right-speed">400</div>
+            </div>
+            <div class="status-card">
+                <h4>FPS</h4>
+                <div class="status-value" id="fps">30</div>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>串口输出</h3>
+            <div class="serial-output" id="serial-output"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const robot = document.getElementById('robot');
+        
+        let isRunning = false;
+        let animationId;
+        let currentColorIndex = 0;
+        let robotX = 400;
+        let lineX = 400;
+        let prevError = 0;
+        let integral = 0;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        
+        const colors = [
+            {name: '黑色', rgb: [0, 0, 0], threshold: [21, 33, -15, 9, -9, 6]},
+            {name: '绿色', rgb: [0, 255, 0], threshold: [40, 86, -44, -20, -24, 25]},
+            {name: '红色', rgb: [255, 0, 0], threshold: [0, 100, 15, 127, 15, 127]},
+            {name: '蓝色', rgb: [0, 0, 255], threshold: [0, 100, -128, -10, -128, 127]}
+        ];
+
+        function drawScene() {
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#90EE90');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制检测区域
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+            
+            // 绘制跟踪线
+            const color = colors[currentColorIndex];
+            ctx.fillStyle = `rgb(${color.rgb.join(',')})`;
+            ctx.fillRect(lineX - 15, canvas.height/2 - 15, 30, 30);
+            
+            // 绘制中心线
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(400, 0);
+            ctx.lineTo(400, canvas.height);
+            ctx.stroke();
+            
+            // 绘制机器人
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(robotX - 20, canvas.height - 80, 40, 60);
+            
+            // 绘制机器人中心线
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(robotX, canvas.height - 100);
+            ctx.lineTo(robotX, canvas.height - 80);
+            ctx.stroke();
+            
+            // 绘制当前位置线
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(robotX, canvas.height/2);
+            ctx.lineTo(robotX, canvas.height);
+            ctx.stroke();
+        }
+
+        function calculatePID() {
+            const kp = parseFloat(document.getElementById('kp').value);
+            const ki = parseFloat(document.getElementById('ki').value);
+            const kd = parseFloat(document.getElementById('kd').value);
+            const baseSpeed = parseInt(document.getElementById('base-speed').value);
+            
+            const target = 400;
+            const current = robotX;
+            const error = target - current;
+            
+            integral += error;
+            integral = Math.max(-50, Math.min(50, integral));
+            const derivative = error - prevError;
+            
+            const output = kp * error + ki * integral + kd * derivative;
+            
+            let leftSpeed = baseSpeed - output;
+            let rightSpeed = baseSpeed + output;
+            
+            leftSpeed = Math.max(-1000, Math.min(1000, leftSpeed));
+            rightSpeed = Math.max(-1000, Math.min(1000, rightSpeed));
+            
+            prevError = error;
+            
+            // 更新机器人位置 - 改进PID控制效果
+            // 根据左右轮速度差调整机器人转向
+            const speedDiff = (rightSpeed - leftSpeed) / 50; // 增大系数使转向更明显
+            robotX += speedDiff;
+            robotX = Math.max(20, Math.min(780, robotX)); // 限制在合理范围内
+            
+            // 更新UI
+            document.getElementById('target-pos').textContent = target;
+            document.getElementById('current-pos').textContent = Math.round(current);
+            document.getElementById('error').textContent = Math.round(error);
+            document.getElementById('left-speed').textContent = Math.round(leftSpeed);
+            document.getElementById('right-speed').textContent = Math.round(rightSpeed);
+            
+            // 更新滑块显示值
+            document.getElementById('kp-value').textContent = kp;
+            document.getElementById('ki-value').textContent = ki;
+            document.getElementById('kd-value').textContent = kd;
+            document.getElementById('speed-value').textContent = baseSpeed;
+            
+            // 模拟串口输出 - 修正帧显示
+            const frame = new Uint8Array([0xAA, 0x01, leftSpeed & 0xFF, (leftSpeed >> 8) & 0xFF, 
+                                        rightSpeed & 0xFF, (rightSpeed >> 8) & 0xFF, 0x55]);
+            const hexString = Array.from(frame).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            
+            const serialOutput = document.getElementById('serial-output');
+            serialOutput.innerHTML = `[${new Date().toLocaleTimeString()}] 发送: ${hexString}<br>` + serialOutput.innerHTML;
+            if (serialOutput.children.length > 50) {
+                serialOutput.innerHTML = serialOutput.innerHTML.substring(0, 1000);
+            }
+            
+            // 更新FPS
+            frameCount++;
+            const currentTime = Date.now();
+            if (currentTime - lastTime >= 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+        }
+
+        function animate() {
+            if (!isRunning) return;
+            
+            drawScene();
+            calculatePID();
+            
+            // 随机移动跟踪线
+            if (Math.random() < 0.02) {
+                lineX += (Math.random() - 0.5) * 50;
+                lineX = Math.max(100, Math.min(700, lineX));
+            }
+            
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function setColor(index) {
+            currentColorIndex = index;
+            document.querySelectorAll('.color-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === index);
+            });
+        }
+
+        function toggleSimulation() {
+            const btn = document.getElementById('startBtn');
+            isRunning = !isRunning;
+            
+            if (isRunning) {
+                btn.textContent = '停止仿真';
+                btn.classList.add('stop');
+                animate();
+            } else {
+                btn.textContent = '开始仿真';
+                btn.classList.remove('stop');
+                cancelAnimationFrame(animationId);
+            }
+        }
+
+        // 事件监听
+        document.getElementById('kp').addEventListener('input', function() {
+            document.getElementById('kp-value').textContent = this.value;
+        });
+        document.getElementById('ki').addEventListener('input', function() {
+            document.getElementById('ki-value').textContent = this.value;
+        });
+        document.getElementById('kd').addEventListener('input', function() {
+            document.getElementById('kd-value').textContent = this.value;
+        });
+        document.getElementById('base-speed').addEventListener('input', function() {
+            document.getElementById('speed-value').textContent = this.value;
+        });
+
+        // 初始化
+        drawScene();
+    </script>
+</body>
+</html>
