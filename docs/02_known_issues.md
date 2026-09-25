@@ -293,10 +293,13 @@ else: return rect_binary_large
 
 ## P3 · 一致性与文档
 
-1. **仓库里有 4 套互不兼容的串口帧格式**，而且**没有任何一处做字节流重同步**。
+1. **仓库里有 10 套互不兼容的串口帧格式**（逐行核对结果，完整表在
+   [`../07_contest/README.md`](../07_contest/README.md) 的"全仓库串口协议不统一"一节），
+   而且**没有任何一处做字节流重同步**。
    所有接收路径都是 `n = uart.readinto(buf, N); if n == N: 校验` ——
    丢一个字节，之后每一次读都在解析错位数据，**永远不会自愈**。
    现象是"识别偶尔不对"，是最难查的一类故障。
+   （下表只列与"哪两端能对上"这个结论相关的 4 种，不是全部 10 种。）
    | 格式 | 谁在用 |
    | --- | --- |
    | `AA + type:B + x:H + y:H + 55`（7 字节） | 事实标准，30 处。2025 主程序、`06_practice/08` |
@@ -305,8 +308,11 @@ else: return rect_binary_large
    | 收 5 字节但注释说 4 字节 | `main_thresh_ui_accurate.py`、`2023_E_laser/main_high_fps.py` |
 
    ⚠️ 那个 C 解析器会**丢弃 `06_practice/` 发出的每一帧**。
-   还有 `uart_rx_tx.c` 自身：`#include "command.h"` 在本仓库不存在；环形缓冲 off-by-one
-   （`GetLength` 满时只报 127/128；`GetRemain` 空时返回 128，于是写满 128 字节会让
+   还有 `uart_rx_tx.c` 自身：`#include "command.h"`，而那份头文件在**另一个工程里**
+   （`serial_packet/Core/Inc/command.h`），且它**只声明了片段里 6 个函数中的 2 个**
+   （`Command_Write`、`Command_GetCommand`）—— 片段单独放进任何工程都编译不过，
+   另外 4 个（`Command_AddReadIndex` / `Command_Read` / `Command_GetLength` / `Command_GetRemain`）没有声明。
+   环形缓冲 off-by-one（`GetLength` 满时只报 127/128；`GetRemain` 空时返回 128，于是写满 128 字节会让
    `read==write`、"满"被当成"空"、数据全丢）；边界 `< BUFFER_SIZE` 应为 `<=`。
 
 2. **根 README 此前有两处虚假声明**（本次已改）：声称 2021 年有整理资料（该目录一直是空的）；
@@ -342,6 +348,126 @@ else: return rect_binary_large
 
 ---
 
+## 第二轮补充：写各目录 README 时逐行读代码新发现的
+
+这一批是给 18 个目录各写一份 README 的过程中发现的，**每条都在这里重新核实过**（下面标注的行号都是本次 grep 出来的，不是转抄）。同样只归类、不修改。
+
+### P1 · 会静默毁掉标定结果
+
+**N-P1-1 · 调参 UI 预览的不是它保存的东西** —— `06_practice/01_all_in_one.py`
+
+| 行 | 代码 |
+| --- | --- |
+| 183 | `processed_img = processed_img.binary([[i - 128 for i in slider_values]])` |
+| 371 | `RED_THRESHOLD.extend([tuple(slider_values)])` |
+| 374 | `rect_binary_threshold.extend([tuple(slider_values)])` |
+
+预览时给每个通道**减了 128**（LAB 的 A/B 是带符号量，这一步把它从滑块的 0–255 换算到有符号范围），
+保存时保存的是**换算前的原始滑块值**。
+后果：你在屏幕上看到"刚刚好"的那一帧，按下去保存下来的 A/B 阈值整体偏了 128，
+下一次开机跑的是一套你从没见过的参数。
+**只有 `red_point`（LAB 颜色）这一条路径受影响**：灰度矩形模式第 188 行
+`binary([slider_values[:2]])` 没有偏移，和 374 行的保存值是自洽的。
+所以这个 bug 只在"调红点阈值"时出现，更不容易被发现。
+**建议**：让 183 和 371 用同一个表达式（要么都在预览处换算、要么在保存处换算，不要一边换一边不换）。
+改完必须重新标定一次红点，因为**卡上存过的红点阈值全都是偏的**。
+
+**N-P1-2 · 三子棋的帧率上限来自一个 `sleep`，不来自视觉** —— `07_contest/2024_E_tic_tac_toe/main_tic_tac_toe.py`
+
+`receive_and_unpack()`（第 316 行）里有 `time.sleep(0.05)`（第 321 行），
+而主循环**每一轮都调用它**（第 1451 行）。单这一行就把整个系统钉在 **≈20 FPS**，
+和你调什么阈值、画不画 ROI 都无关。
+**建议**：先确认非阻塞读（`uart.any()`）能不能替掉这个 sleep；能的话帧率提升是白来的。
+⚠️ 注意这个文件目前因为 P0-1（缺 `import os`）根本进不到主循环，**这条要在修完 P0-1 之后才测得出效果**。
+
+### P2 · 名字对、语义错（抄之前先看这一节）
+
+**N-P2-1 · `blob_area_threshold` 被当 `pixels_threshold` 用，而且值是 5**
+`06_practice/03_nested_rect.py:132`、`:219`，`04_triangle.py:113`：
+
+```python
+blob_area_threshold = 5                       # 名字写的是"面积"
+red_blobs = img.find_blobs(RED_THRESHOLD, pixels_threshold=blob_area_threshold)
+```
+
+变量名叫面积、实参是**像素数**、值是 5 —— 一坨 5 像素的噪点就能通过筛选，
+紧接着 `max(red_blobs, key=lambda x: x.pixels())`（`03:230`、`04:116`）从这个大概率是噪声的集合里
+挑一个当"激光点"。
+同理 `rect_area_threshold = 20000` 在 `03:142` 被写成 `find_rects(threshold=int(rect_area_threshold * 1.5))`，
+而 `find_rects` 的 `threshold` 是**矩形度评分**（越大越方）、不是面积门槛；真正的面积过滤是紧随其后的 147–148 行另做的。
+这两处都**不会报错**，只会让结果难以解释。
+
+**N-P2-2 · 两个"画图形"的脚本根本没有串口** —— `07_contest/laser_drawing/04_pentagram.py`、`07_ui_debug.py`
+全文**一次都没有出现 `uart`**。它们只能算"路径规划演示"，接不上激光打标机。
+按教程序列（01→07）抄到这两份会以为"前面那些 UART 代码是可选的"。
+另：`01↔02` 内容 88% 相同、`01↔03` 74%、`01↔06` 60% —— 这是一条迭代序列，不是重复文件。
+
+**N-P2-3 · 2025 两个主程序收包长度不一致**
+`result/main_thresh_ui_fast.py:487` 是 `bytearray(4)`，而同目录
+`result/main_thresh_ui_accurate.py:778` 是 `bytearray(5)`。下行命令是 4 字节（`55 XX FF FF`），
+所以高精版要求读满 5 字节 —— 对端按 4 字节发就**永远进不了命令分支**。
+（2023 那套同样读 5：`main_high_fps.py:186-187`、`k230_full.py:165-166`。已记在 P3-1。）
+
+**N-P2-4 · `find_line_segments` 用关键字传参，形参名可疑** —— `06_practice/05_polygon_from_lines.py:194`
+
+```python
+lines = img.find_line_segments(merge_distance=20, max_theta_diff=10)
+```
+
+官方签名里第三个形参叫 **`max_theta_difference`**（见 `04_official_resources.md` 的 image API 手册），
+这里写的是 `max_theta_diff` → 大概率 `TypeError: unexpected keyword argument`。
+**标为待实测**：位置传参在别处是对的（见下面"别去修"第一条），所以最保守的改法是
+改成 `find_line_segments(roi, 20, 10)` 而不是猜关键字。上板确认前不要动其他文件的写法。
+
+**N-P2-5 · 三子棋的 RGB 指示灯从来没被驱动过** —— `main_tic_tac_toe.py:17-23`
+`LED_R/LED_G/LED_B` 在初始化时各 `high()` 一次（注释说明这是"关灯"），之后**全文再无任何一处操作它们**；
+`LED = LED_R`（第 23 行）是个死变量，从没被读过。
+所以"用灯色指示识别状态"这个功能只存在于变量名里。要接线的话，注意它是**低电平点亮**。
+
+### P3 · 一致性与依赖
+
+**N-P3-1 · 43 个文件用了 `image.` 常量却没有 `import image`**
+实测分布：`05_cv_lite/` **19**（该目录 27 个 `.py` 里的 19 个）、`07_contest/` 11、
+`01_basics/` 7、`06_practice/lvgl/` 4、`04_number_classification/code/v1.3/cls_image_1_3.py`、
+`other_boards/maixpy/offline_threshold_tuner.py`。它们直接写 `image.GRAYSCALE` 这类常量，
+而**没有一行 `import image`** —— 这个名字是从 `from media.sensor import *` 里顺带进来的。
+今天能跑，但：删掉那句星号导入 → 这 43 个文件同时 `NameError`；
+也正因为是星号导入，静态检查看不出这个依赖（本仓库不跑静态检查，但你自己加 linter 时会撞上）。
+**建议**：如果要长期用，逐个补 `import image` 比保留星号导入更稳。
+（对照：仓库里有 **18** 个文件是**显式** `import image` 的 —— 例如 `02_data_collection/01_capture_single.py`
+和 `03_ai_demos/` 那一整套。两种写法并存，没有任何文档说明该学哪个。）
+
+**N-P3-2 · `Display.init` 的 `quality=` 三种写法并存** —— `05_cv_lite/`
+实测分布：`quality=100` 5 个文件、`quality=50` 16 个文件、**不带 `quality`** 6 个文件。
+这直接决定回传给 IDE 的 JPEG 质量和帧率，却没有任何一处文档说明为什么取值不同。
+定一个值写进 README，其余对齐。
+
+**N-P3-3 · `07_rgb888_open.py` 的输入和其他形态学示例不可比**
+它的 `threshold_value = 0`（0 = 走 Otsu 自动阈值），而 `05_erode / 06_dilate / 08_close /
+09_tophat / 10_blackhat / 11_gradient` 全是 `threshold_value = 100`。
+于是"开运算 vs 其他运算"的对比里混进了一个变量 —— 学生按顺序跑会得出错误结论。
+（同目录 `04_rgb888_exposure_fast.py:51` 注释说"1.5 倍"，代码写的 `exposure_gain = 2.5`，注释过期。）
+
+**N-P3-4 · `snippets/uart_rx_tx.c` 与 `serial_packet/Core/Src/command.c` 是同一份代码**
+`diff` 结果只差**文件末尾的一个换行符**。前者是给 K230 侧对照看的独立片段，后者在工程里能编译。
+不是重复文件可以随便删，但**改一处必须同步另一处**，否则下一个读代码的人会被误导。
+
+**N-P3-5 · `.gitignore` 的两条反向规则已经指向不存在的目录**
+`!Data/Number image/*.png` 和 `!Data/dataset/**/*.jpg` 里的 `Data/` 早就是 `data/`（而且现在只有
+`04_number_classification` 有这层），改名之后这两条**谁也不匹配**。
+那 808 张图之所以还在版本库里，是因为**根本没有规则忽略 `*.jpg`** —— 一旦有人加一条
+`*.jpg` 忽略规则，数据集会静默消失。要么删掉这两条，要么改成实际路径。
+
+### 需要作者自己判定，别由着性子改
+
+**N-Q-1 · 三子棋：任务 4 和任务 5 跑的是同一段代码**
+`task4_start`（第 362 行置位）在主循环第 **1469-1470** 行触发 `task6_computer_fore(img)`，
+而 `task5_start` 在第 **1474** 行触发的是**同一个函数**。全文没有任何 `task4_*` 函数。
+两种可能：当年题目要求任务 4/5 实现相同（那就没问题），或者复制时漏改（那就是缺陷）。
+**从代码本身无法判定**，只能问经历过那次比赛的人。别"顺手"把它拆开 —— 那会改变得分行为。
+
+---
+
 ## 澄清：这些**不是** bug，别去"修"
 
 查官方 API 手册后发现下面几条曾被误判。列在这里防止后来者改错。
@@ -366,6 +492,9 @@ else: return rect_binary_large
 3. **`P0-3/P0-4` 三个 typo** —— 各一行
 4. **`P1-4/P1-5` 生命周期** —— 一次性解决"每次都要断电"，性价比最高
 5. **`P1-6` 先加 `sys.print_exception`** —— 它不修任何 bug，但让剩下所有的都能被看见
-6. `P1-2` UI 覆盖阈值（赛前关键）、`P1-3` 死状态、`P1-1` 恒真门 —— 这三个都会改变运行行为，逐个改、逐个上板
-7. `P2-*` 按需
+6. `P1-2` UI 覆盖阈值（赛前关键）、**`N-P1-1` 调参预览与保存值差 128**（同为赛前关键，
+   且**修完必须重标一次**，因为卡上存过的值全是偏的）、`P1-3` 死状态、`P1-1` 恒真门
+   —— 这些都会改变运行行为，逐个改、逐个上板
+7. `P2-*` 按需；`N-P2-1`（`pixels_threshold` / `find_rects` 的 `threshold` 语义混用）
+   虽然不崩，但它让"调出来的结果"不可解释，**建议排在 P1 之后立刻做**
 8. `P2-7`、以及串口协议统一 —— **要和 MCU 侧一起定**，别单方面改线上格式
