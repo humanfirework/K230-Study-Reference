@@ -179,13 +179,13 @@ grep -L "os.exitpoint()" $(grep -l "while True:" 0*/*/*.py)                   # 
 | --- | --- | --- |
 | AI 推理 | `from libs.PipeLine import PipeLine`<br>`from libs.AIBase import AIBase`<br>`from libs.AI2D import Ai2d`<br>`import nncase_runtime as nn` | `from libs.PlatTasks import ClassificationApp`<br>`from libs.PlatTasks import DetectionApp`<br>预处理/后处理都封在固件里 |
 | 代码量 | 手写 ai2d + kpu + softmax，冗长但看得清每一步 | 短约 10 倍，但内部过程看不见 |
-| 本仓库哪里用 | **`03_ai_demos/` 全部 18 个**、`04_number_classification/code/firmware_v1_2_2/`、`find_rect/det_*_1_2_2.py` | `code/firmware_v1_3/`、`det_*_1_3.py` |
+| 本仓库哪里用 | **`03_ai_demos/` 全部 18 个**、`04_number_classification/code/v1.2.2/`、`07_contest/2025_E_self_aiming/find_rect/det_*_1_2_2.py` | `code/v1.3/`、`det_*_1_3.py` |
 
 ⚠️ **`03_ai_demos/` 大概率在你的 v1.3 固件上跑不了** —— 那是整个目录级别的坏消息，
 不是个别文件。所以：
 
 - 想**学 API 和推理流程** → 读 `03_ai_demos/`（它的结构仍然有参考价值）
-- 想**真的跑 AI** → 用官方 v1.3 例程，或走 `04_number_classification/code/firmware_v1_3/` 这条路
+- 想**真的跑 AI** → 用官方 v1.3 例程，或走 `04_number_classification/code/v1.3/` 这条路
 - 想**看懂 ai2d/kpu 每一步在干什么** → 反而该读 v1.2.2 那份，它把细节都摊开了
 
 判断自己的版本用第 1 节那两行 `import`。

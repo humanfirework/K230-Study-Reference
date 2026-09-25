@@ -204,7 +204,7 @@ import os               # 如果某文件用了 os.exitpoint() 却没有这一�
 | `02_data_collection/05_data_collect.py` | 和 `02_capture_burst.py` 近重复，但分辨率和注释不同，是早期版本 |
 | `01_basics/10_find_apriltag_basic.py` + `12_..._full.py` | 两个 AprilTag 示例，差在采集分辨率（320×240 / 800×480），各有用处 |
 | `07_contest/laser_drawing/01–06` | 5 个图形程序约 80% 重复，差别在曝光处理、坐标来源、有无 UI |
-| `laser_drawing/05_digits_EMPTY.py` | **0 字节**，占位从未实现。留着是为了让教程序列上的这个缺口可见，而不是被悄悄重编号掉 |
+| `07_contest/laser_drawing/05_digits_EMPTY.py` | **0 字节**，占位从未实现。留着是为了让教程序列上的这个缺口可见，而不是被悄悄重编号掉 |
 | `07_contest/2021_F_drug_car/` | **空目录**。这一题从来没写过 K230 代码。根 README 以前声称有 2021 资料，那是错的 |
 
 两个**名字不能改**的地方，改了会静默失效：
@@ -246,4 +246,4 @@ import os               # 如果某文件用了 os.exitpoint() 却没有这一�
 - `07_contest/2023_E_laser/yahboom_reference/` —— 亚博 K230 参考包
 - `07_contest/reference/{image_recognition,basic_gpio}/` —— 立创·庐山派官方例程
 - `NUEDC_TOPIC-master/` —— 第三方整理的电赛真题档案（MIT）
-- `*/mp_deployment_source/`、`code/firmware_v*/`、`find_rect/det_*` —— 嘉楠在线训练平台导出件
+- `*/mp_deployment_source/`、`code/v1.2.2/` 与 `code/v1.3/`、`find_rect/det_*` —— 嘉楠在线训练平台导出件

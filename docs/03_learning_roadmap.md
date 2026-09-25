@@ -120,7 +120,7 @@
 
 | # | 练习 | 验收标准 |
 | --- | --- | --- |
-| 4.1 | 用 `04_number_classification/code/firmware_v1_3/` 跑 `data/test_images/` 那 8 张图 | ≥7/8 正确；能在 `deploy_config.json` 里找到 kmodel 路径并**解释每一个字段** |
+| 4.1 | 用 `04_number_classification/code/v1.3/` 跑 `data/test_images/` 那 8 张图 | ≥7/8 正确；能在 `deploy_config.json` 里找到 kmodel 路径并**解释每一个字段** |
 | **4.2** | **用 `02_data_collection/02_capture_burst.py` 自己采一套 8 类数据集** | 每类 100 张、均衡、和现有 480×320 格式一致 |
 | 4.3 | 按 [04_official_resources.md](04_official_resources.md) 里的训练文档，在嘉楠在线平台训一个 | 得到能在你板子上跑、对自己测试图 ≥80% 的 `.kmodel`。**平台连不上就如实记录并停下，不要伪造结果** |
 | 4.4 | 跑检测：`find_rect/det_image_1_3.py`，自备一张 `test.jpg`（原件不在仓库，且两个脚本找的路径不一样） | 打印的靶标上框正确；然后**验证 padding 修复（P2-5）确实改变了裁剪结果** |

@@ -34,7 +34,7 @@
    **别照 `main` 抄**，先切到你对应的版本。
 
 对应本仓库：这是所有 API 问题的第一出处；`03_ai_demos/`（v1.2 API）和
-`04_number_classification/code/firmware_v1_3/`（v1.3 API）的差别，也要靠版本选择器来对照看。
+`04_number_classification/code/v1.3/`（v1.3 API）的差别，也要靠版本选择器来对照看。
 
 ### [image 图像处理 API 手册](https://www.kendryte.com/k230_canmv/en/v1.2/api/openmv/image.html)
 
