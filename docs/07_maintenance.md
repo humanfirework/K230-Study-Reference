@@ -323,7 +323,7 @@ grep -rl "^import cv_lite\|^from cv_lite" --include="*.py" . | wc -l   # 当前 
 
 ## 6. 提交哈希与历史
 
-- **正文里不再写提交哈希。** 旧文档里有 60 处引用了 `89e6ffc`、`28b5f40`、`f2d0a64`、`78cdb53`，这些都不在当前 `main` 上（在前两个整理分支里），照抄会在本地 `git show` 时报 `unknown revision`。
+- **正文里不再写提交哈希。** 旧文档里有几十处引用了 `89e6ffc`、`28b5f40`、`f2d0a64`、`78cdb53`，这些都不在当前 `main` 上（在前两个整理分支里），照抄会在本地 `git show` 时报 `unknown revision`。
 - 要追一个文件的历史，用 `git log --follow --oneline -- 路径`；要看某次改名的完整差异，用 `git log --follow --stat`。
 - 仓库当前历史里，与结构整理相关的是 `8d83380`…`35da7a7` 这一串（目录改名）和 `7a590a3`（根 README + docs 初版）；后续修改以 `git log` 为准，不在文档里枚举。
 

@@ -405,7 +405,7 @@ lines = img.find_line_segments(merge_distance=20, max_theta_diff=10)
 <a id="p3-8"></a>
 - **P3-8 · `12_find_apriltag_full.py:132-141` 的焦距注释是 OpenMV OV7725 的资料。** 与 GC2093 无关，照抄会算错距离。
 <a id="p3-9"></a>
-- **P3-9 · 43 个文件用了 `image.` 常量却没有 `import image`。** 分布：`05_cv_lite` 19、`07_contest` 11、`01_basics` 7、`06_practice/lvgl` 4、`04` 的 `cls_image_1_3.py`、`maixpy` 1。这个名字是从 `from media.sensor import *` 顺带进来的；今天能跑，但静态检查看不出来。
+- **P3-9 · 44 个文件用了 `image.` 常量却没有 `import image`。** 分布：`05_cv_lite` 19、`07_contest` 12、`01_basics` 7、`06_practice/lvgl` 4、`04` 的 `cls_image_1_3.py`、`other_boards/maixpy` 1。这个名字是从 `from media.sensor import *` 顺带进来的；今天能跑，但静态检查看不出来。
 <a id="p3-10"></a>
 - **P3-10 · `Display.init` 的 `quality=` 三种写法并存。** `05_cv_lite` 里 `quality=100` 5 个、`quality=50` 16 个、不写 6 个。它直接决定回传 IDE 的 JPEG 质量和帧率，却没有任何说明。
 <a id="p3-11"></a>

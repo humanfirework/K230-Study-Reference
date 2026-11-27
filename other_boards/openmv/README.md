@@ -42,7 +42,7 @@ MIT 允许修改与商用，唯一条件是保留版权声明。把 `LICENSE` �
 ### 可借鉴的三招
 
 1. **嵌套 ROI。** 先 `find_blobs([黑框], merge=False)`，再对每个候选 `find_blobs([白], roi=blob.rect(), merge=False)`。第二遍的搜索面积被压到框内，候选数和误检一起降；CanMV 的 `find_blobs` 同样支持 `roi=`，`blob.rect()` 的顺序要对上 `(x, y, w, h)`（待上板确认）。
-2. **`lens_corr(1.4)` 镜头畸变校正。** 广角镜头把画面边缘的直线拉弯，而矩形检测对直线最敏感。在 `find_rects()` 前调一次，往往比加大 `threshold` 更有效。CanMV 侧同名可用，仓库根目录的 `reference/image_recognition/2，图像处理.py:88` 有一处 `src_img.lens_corr(3.0)` 可对照。
+2. **`lens_corr(1.4)` 镜头畸变校正。** 广角镜头把画面边缘的直线拉弯，而矩形检测对直线最敏感。在 `find_rects()` 前调一次，往往比加大 `threshold` 更有效。CanMV 侧同名可用，`07_contest/reference/image_recognition/2，图像处理.py:88` 有一处 `src_img.lens_corr(3.0)` 可对照。
 3. **参数集中在一个区域。** `激光矩形集中调参.py` 开头的调试参数区（第 6–35 行），每个参数都标了推荐范围；调参只改这一块，赛场不用全文 grep。它还区分"初始确认"与"持续跟踪"两套判据：确认时收紧，跟踪时放宽。
 
 读代码时先看这几处：V1 的第 70–82 行是嵌套 ROI 的完整写法；`激光矩形集中调参.py` 的第 6–35 行是参数区，第 130–136 行是圆形度筛选；`green.py` 的第 40 行是 `lens_corr`，第 55 行是中心 70×70 ROI。
@@ -66,7 +66,7 @@ MIT 允许修改与商用，唯一条件是保留版权声明。把 `LICENSE` �
 ## 相关
 
 - 串口族表：[docs/06](../../docs/06_uart_protocol.md)
-- 你自己的同题方案：[`07_contest/2025_E_self_aiming/`](../../07_contest/2025_E_self_aiming/)
+- 本仓库的同题方案：[`07_contest/2025_E_self_aiming/`](../../07_contest/2025_E_self_aiming/)
 - 执行端：[`other_boards/stm32/`](../stm32/README.md)
 - 平台划分：[`other_boards/README.md`](../README.md)
 - 官方入口：[docs/04](../../docs/04_official_resources.md)
