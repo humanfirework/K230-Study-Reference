@@ -22,14 +22,7 @@ pip install pyserial matplotlib
 
 数据链的整体形状是：模拟量在 MCU 侧采成数字，经 UART 变成文本行，到 PC 才成为曲线；虚线那一段要你自己补。
 
-```mermaid
-flowchart LR
-    A["模拟量（外部传感器）"] --> B["MCU 采 ADC"]
-    B --> C["UART 文本行<br/>每行一个浮点数"]
-    C --> D["pc_tools/serial_plot_monitor.py"]
-    D --> E["matplotlib 曲线"]
-    C -.-> F["仓库里没有发送端"]
-```
+![串口曲线监控的数据链](../docs/assets/diagrams/16-pc-chain.png)
 
 ## 能不能跑
 

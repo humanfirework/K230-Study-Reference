@@ -19,15 +19,7 @@
 
 两条路线的分工：
 
-```mermaid
-flowchart LR
-    subgraph R1["路线 A：K230 只做视觉"]
-        A1["识别矩形 / 激光点"] --> A2["UART2：AA … 55 帧"] --> A3["STM32 解析"] --> A4["云台 / 步进电机"]
-    end
-    subgraph R2["路线 B：K230 直接驱动"]
-        B1["识别"] --> B2["两路 PWM 脉宽"] --> B3["云台舵机"]
-    end
-```
+![2023 的两条路线：UART 发给 STM32，或 PWM 直驱](../../docs/assets/diagrams/11-2023-routes.png)
 
 ### 路线 A 的基准：`main_high_fps.py`
 

@@ -1,0 +1,6 @@
+flowchart LR
+    A["模拟量（外部传感器）"] --> B["MCU 采 ADC"]
+    B --> C["UART 文本行<br/>每行一个浮点数"]
+    C --> D["pc_tools/serial_plot_monitor.py"]
+    D --> E["matplotlib 曲线"]
+    C -.-> F["仓库里没有发送端"]

@@ -1,0 +1,6 @@
+flowchart LR
+    A["sensor.snapshot()"] --> B["img.to_numpy_ref()<br/>只取指针，不拷贝"]
+    B --> C["cv_lite.xxx(image_shape, np, …)"]
+    C --> D["image.Image(alloc=image.ALLOC_REF, data=…)<br/>仍是同一块内存"]
+    D --> E["Display.show_image()"]
+    A -.-> F["裸 while True 之后：<br/>sensor.stop / Display.deinit /<br/>MediaManager.deinit —— 不可达"]

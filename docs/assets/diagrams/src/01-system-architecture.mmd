@@ -1,0 +1,10 @@
+flowchart TD
+    CAM["镜头 GC2093<br/>sensor_id = 2"] --> ACQ["采集<br/>01_basics"]
+    ACQ --> PRE["预处理<br/>二值化 · 形态学 · 曝光<br/>01_basics / 05_cv_lite"]
+    PRE --> JUDGE["判据<br/>find_blobs / find_rects /<br/>find_line_segments / get_regression"]
+    JUDGE --> DEC["决策<br/>稳定计数 · 一帧外推 · 状态机<br/>06_practice / 07_contest"]
+    DEC --> DISP["显示<br/>ST7701 / HDMI / IDE"]
+    DEC --> UART["UART2<br/>GPIO11 TX / GPIO12 RX"]
+    UART --> MCU["STM32<br/>解析帧 · 云台 / 电机"]
+    MCU --> ACT["执行机构"]
+    DEC --> LASER["GPIO48 激光"]

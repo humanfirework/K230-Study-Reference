@@ -19,19 +19,7 @@
 
 数据链路可以一句话概括：`02_capture_burst.py` 按键切类别、每类连拍 100 张（脚本里是 `one`…`zero` 共 10 类），板外手工改名成 `1..8` 只保留 8 类，得到 800 张 480×320 JPEG；训练在嘉楠在线平台完成，仓库里只留下导出件。**从采集到部署的链路如图，训练与配置这两段在仓库外。**
 
-```mermaid
-flowchart LR
-    A["02_capture_burst.py<br/>按键切类别，每类连拍 100 张"] --> B["data/dataset/one … zero<br/>脚本里是 10 类"]
-    B --> C["板外手工改名 1..8<br/>只保留 8 类，仓库里没有改名脚本"]
-    C --> D["data/dataset/1..8<br/>8 类 × 100 张 = 800 张<br/>480×320 JPEG"]
-    D --> E["嘉楠在线训练平台<br/>仓库里没有训练脚本或记录"]
-    E --> F["导出件：*.kmodel + deploy_config.json<br/>config 不在仓库"]
-    F --> G["拷到 /sdcard/mp_deployment_source/"]
-    G --> H["code/v1.2.2/<br/>手写 ai2d + kpu + softmax"]
-    G --> I["code/v1.3/<br/>libs.PlatTasks.ClassificationApp"]
-    H --> J["OSD 显示 / UART 输出"]
-    I --> J
-```
+![采集、数据集、训练、kmodel、两代部署脚本](../docs/assets/diagrams/08-classification-pipeline.png)
 
 ### 两版脚本的六步对照
 

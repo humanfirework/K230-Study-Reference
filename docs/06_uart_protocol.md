@@ -79,22 +79,7 @@ AA | len | payload… | sum
 
 下面的流程按代码逐行画；括号里是行号。
 
-```mermaid
-flowchart TD
-    A["进入 Command_GetCommand()"] --> B{"未处理字节数 < 4 ?"}
-    B -- 是 --> R0["返回 0（等更多数据）"]
-    B -- 否 --> C{"readIndex 处是 0xAA ?"}
-    C -- 否 --> C1["readIndex 前进 1 字节"] --> B
-    C -- 是 --> D["length = 下一字节（整帧长度）"]
-    D --> E{"未处理字节数 < length ?"}
-    E -- 是 --> R0
-    E -- 否 --> F["sum = 前 length-1 个字节之和"]
-    F --> G{"sum == 第 length 个字节 ?"}
-    G -- 否 --> C1
-    G -- 是 --> H["拷贝 length 字节到 command"]
-    H --> I["readIndex 前进 length"]
-    I --> J["返回 length"]
-```
+![STM32 解析器流程，对应 command.c:104-136](assets/diagrams/07-stm32-parser.png)
 
 这套结构本身是对的（找头 → 读长度 → 等齐 → 校验 → 交付），**问题在两端对"长度"的定义不一致**。另外三处边界缺陷（缓冲区 128 但最大只报 127；写满 128 字节后"满"被当成"空"；`writeIndex + length < BUFFER_SIZE` 应为 `<=`）记在[已知问题 P3-1](02_known_issues.md#p3-1)。
 

@@ -14,21 +14,7 @@
 
 主循环每帧的顺序：
 
-```mermaid
-flowchart TD
-    A["while True：os.exitpoint()"] --> B["receive_and_unpack()<br/>首句 time.sleep(0.05)"]
-    B --> C["snapshot() 160×120"]
-    C --> D["update_board_state(img)<br/>stable_frames 去抖"]
-    D --> E{"task4 / task5 / task6 标志"}
-    E -- "任务 4 或 6" --> F["task6_computer_fore(img)"]
-    E -- "任务 5" --> G["task5_player_fore(img)"]
-    E -- "都没置位" --> H["跳过"]
-    F --> I["max_rect() 找棋盘 → 九点 / 角度"]
-    G --> I
-    H --> I
-    I --> J["Display.show_image()"]
-    J --> A
-```
+![2024 三子棋的主循环](../../docs/assets/diagrams/12-2024-loop.png)
 
 ### 按函数读 `main_tic_tac_toe.py`
 

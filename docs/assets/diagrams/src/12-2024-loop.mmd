@@ -1,0 +1,13 @@
+flowchart TD
+    A["while True：os.exitpoint()"] --> B["receive_and_unpack()<br/>首句 time.sleep(0.05)"]
+    B --> C["snapshot() 160×120"]
+    C --> D["update_board_state(img)<br/>stable_frames 去抖"]
+    D --> E{"task4 / task5 / task6 标志"}
+    E -- "任务 4 或 6" --> F["task6_computer_fore(img)"]
+    E -- "任务 5" --> G["task5_player_fore(img)"]
+    E -- "都没置位" --> H["跳过"]
+    F --> I["max_rect() 找棋盘 → 九点 / 角度"]
+    G --> I
+    H --> I
+    I --> J["Display.show_image()"]
+    J --> A

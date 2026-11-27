@@ -29,29 +29,7 @@
 - **`handle_threshold_adjustment()`（128–426 行）**：左右分屏的触摸标定 UI —— 左边实时二值化预览，右边滑块面板（LAB 6 个、灰度 2 个）。赛场上你没时间改代码重烧，只有时间拖滑块，所以这 300 行是这份模板最该保留的部分。
   ⚠️ 它有两个问题：预览给每个通道减了 128、保存却是原值（[P1-8](../docs/02_known_issues.md#p1-8)）；这个循环不读按键，只能靠界面里的返回按钮退出。
 
-```mermaid
-stateDiagram-v2
-    state "0 复位待机" as S0
-    state "1 任务 1（占位）" as S1
-    state "2 任务 2（占位）" as S2
-    state "3 任务 3（占位）" as S3
-    state "4–7 无处理分支" as S47
-    state "8 阈值调节（阻塞循环）" as S8
-    state "9 暂停" as S9
-    [*] --> S0
-    S0 --> S8: 按键 GPIO53
-    S8 --> S0: 界面返回
-    S0 --> S1: 串口 55 01
-    S1 --> S2: 按键
-    S2 --> S3: 按键
-    S3 --> S47: 按键
-    S47 --> S8: 按键
-    S9 --> S0: 按键
-    note right of S47
-        串口可把状态设成 0–255；
-        1/2/3 只有占位文字，4–7 无分支
-    end note
-```
+![01_all_in_one 的状态机与两个切换入口](../docs/assets/diagrams/10-practice-state-machine.png)
 
 ### `06_curve_recognition_WIP.py` 为什么是"不可用"而不是"有 bug"
 

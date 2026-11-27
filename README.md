@@ -16,29 +16,11 @@
 
 这个仓库不是"一堆脚本"，而是按下面这条链组织的。**每个目录对应链上的一环**，看清这条链，就知道为什么有九个目录、以及自己卡在哪一环。
 
-```mermaid
-flowchart TD
-    CAM["镜头 GC2093<br/>sensor_id = 2"] --> ACQ["采集<br/>01_basics"]
-    ACQ --> PRE["预处理<br/>二值化 · 形态学 · 曝光<br/>01_basics / 05_cv_lite"]
-    PRE --> JUDGE["判据<br/>find_blobs / find_rects /<br/>find_line_segments / get_regression"]
-    JUDGE --> DEC["决策<br/>稳定计数 · 一帧外推 · 状态机<br/>06_practice / 07_contest"]
-    DEC --> DISP["显示<br/>ST7701 / HDMI / IDE"]
-    DEC --> UART["UART2<br/>GPIO11 TX / GPIO12 RX"]
-    UART --> MCU["STM32<br/>解析帧 · 云台 / 电机"]
-    MCU --> ACT["执行机构"]
-    DEC --> LASER["GPIO48 激光"]
-```
+![系统主链：镜头到采集、预处理、判据、决策，再到显示、串口和激光](docs/assets/diagrams/01-system-architecture.png)
 
 **支线：AI 模型。** 上面的链是"手工判据"，遇到形状复杂、光照多变的目标就不够了。仓库里还有第二条路，它的输出接回"判据"这一环：
 
-```mermaid
-flowchart LR
-    A["采图<br/>02_data_collection"] --> B["数据集 800 张<br/>04_number_classification"]
-    B --> C["训练<br/>嘉楠在线平台（仓库内无脚本）"]
-    C --> D["kmodel + deploy_config.json"]
-    D --> E["部署 / 推理<br/>04 或 03_ai_demos"]
-    E -.->|"输出坐标 / 类别"| F["接回主链的『判据』"]
-```
+![AI 支线：采图、数据集、训练、kmodel、部署](docs/assets/diagrams/02-ai-lane.png)
 
 两条路的分工：**主链**是"看得懂每一步"的手工判据，调起来快、上限低；**支线**把判据换成一个模型，能处理形状复杂、光照多变的目标，但训练和部署在仓库外。绝大多数赛题是主链 + 少量支线。
 
@@ -78,17 +60,7 @@ flowchart LR
 
 ## 五分钟看到第一帧
 
-```mermaid
-flowchart TD
-    A["烧官方固件镜像"] --> B["连 CanMV IDE，选对串口"]
-    B --> C["运行 01_basics/01_camera_open.py<br/>或 docs/01 的最小模板"]
-    C --> D{"出画面？"}
-    D -- 否 --> D1["按 docs/02 查 P0-3 / P0-4<br/>先看报错原文，别改代码"]
-    D -- 是 --> E["按 IDE 停止，不重启板子，再运行一次"]
-    E --> F{"第二次还能出画面？"}
-    F -- 能 --> G["生命周期合规"]
-    F -- 不能 --> F1["缺 finally 清理：见 docs/01 §4"]
-```
+![五分钟看到第一帧，以及停止后不断电再跑的判定](docs/assets/diagrams/03-first-frame.png)
 
 第二次能直接再跑，说明 `os.exitpoint()` + `finally` 里的清理是完整的。这条"停止后能不能直接再跑"是判断一份 CanMV 脚本写得是否规矩最快的方法 —— 也是本仓库 27 个 `cv_lite` 文件都不合格的地方。
 

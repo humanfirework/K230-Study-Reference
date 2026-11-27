@@ -65,14 +65,7 @@ Display.show_image(img_out)
 
 参数顺序要注意：`image_shape = [480, 640]` 是**高在前**，而 `image.Image()` 收的是 **(宽, 高)**，所以写的是 `image.Image(image_shape[1], image_shape[0], …)`。这个下标用法是本目录最容易抄错的地方。
 
-```mermaid
-flowchart LR
-    A["sensor.snapshot()"] --> B["img.to_numpy_ref()<br/>只取指针，不拷贝"]
-    B --> C["cv_lite.xxx(image_shape, np, …)"]
-    C --> D["image.Image(alloc=image.ALLOC_REF, data=…)<br/>仍是同一块内存"]
-    D --> E["Display.show_image()"]
-    A -.-> F["裸 while True 之后：<br/>sensor.stop / Display.deinit /<br/>MediaManager.deinit —— 不可达"]
-```
+![cv_lite 零拷贝链路与不可达的清理代码](../docs/assets/diagrams/09-zero-copy.png)
 
 副作用要记清：对 `img_np` 的原地修改就是改相机 buffer；`img.draw_rectangle()` 画上去的内容也会进入送进 `cv_lite` 的数据。
 

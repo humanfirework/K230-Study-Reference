@@ -124,27 +124,7 @@ finally:
 
 下面的流程就是模板的结构。三条虚线是三个易漏点各自的后果：
 
-```mermaid
-flowchart TD
-    A["import time / os / sys + media 三模块"] --> B["Sensor(id=2) → reset()"]
-    B --> C["set_framesize() / set_pixformat()"]
-    C --> D["Display.init()"]
-    D --> E["MediaManager.init()"]
-    E --> F["sensor.run()"]
-    F --> G["while True：第一条 os.exitpoint()"]
-    G --> H["snapshot() → 处理 → show_image()"]
-    H --> G
-    G -->|"IDE 停止 / KeyboardInterrupt"| I["except：print + sys.print_exception(e)"]
-    G -->|"其它异常"| I
-    I --> J["finally：sensor.stop()"]
-    J --> K["Display.deinit()"]
-    K --> L["os.exitpoint(EXITPOINT_ENABLE_SLEEP)<br/>time.sleep_ms(100)"]
-    L --> M["MediaManager.deinit()"]
-    M --> N["不断电即可再次运行"]
-    G -.->|"缺这一行"| X1["停止按钮失效"]
-    J -.->|"缺 deinit"| X2["下次运行必须断电"]
-    I -.->|"缺 print_exception"| X3["静默退出，无 traceback"]
-```
+![CanMV 脚本生命周期与三个易漏点](assets/diagrams/04-script-lifecycle.png)
 
 **本仓库现状**：`05_cv_lite/` 全部 27 个文件把清理写在裸 `while True` 之后，**不可达**；另有 3 个文件的 `finally` 被截断在注释处。详见 [P1-4、P1-5](02_known_issues.md#p1-4)。
 

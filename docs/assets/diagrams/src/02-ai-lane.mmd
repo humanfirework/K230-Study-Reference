@@ -1,0 +1,6 @@
+flowchart LR
+    A["采图<br/>02_data_collection"] --> B["数据集 800 张<br/>04_number_classification"]
+    B --> C["训练<br/>嘉楠在线平台（仓库内无脚本）"]
+    C --> D["kmodel + deploy_config.json"]
+    D --> E["部署 / 推理<br/>04 或 03_ai_demos"]
+    E -.->|"输出坐标 / 类别"| F["接回主链的『判据』"]

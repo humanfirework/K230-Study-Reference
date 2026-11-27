@@ -1,0 +1,21 @@
+stateDiagram-v2
+    state "0 复位待机" as S0
+    state "1 任务 1（占位）" as S1
+    state "2 任务 2（占位）" as S2
+    state "3 任务 3（占位）" as S3
+    state "4–7 无处理分支" as S47
+    state "8 阈值调节（阻塞循环）" as S8
+    state "9 暂停" as S9
+    [*] --> S0
+    S0 --> S8: 按键 GPIO53
+    S8 --> S0: 界面返回
+    S0 --> S1: 串口 55 01
+    S1 --> S2: 按键
+    S2 --> S3: 按键
+    S3 --> S47: 按键
+    S47 --> S8: 按键
+    S9 --> S0: 按键
+    note right of S47
+        串口可把状态设成 0–255；
+        1/2/3 只有占位文字，4–7 无分支
+    end note

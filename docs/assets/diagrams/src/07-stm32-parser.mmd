@@ -1,0 +1,14 @@
+flowchart TD
+    A["进入 Command_GetCommand()"] --> B{"未处理字节数 < 4 ?"}
+    B -- 是 --> R0["返回 0（等更多数据）"]
+    B -- 否 --> C{"readIndex 处是 0xAA ?"}
+    C -- 否 --> C1["readIndex 前进 1 字节"] --> B
+    C -- 是 --> D["length = 下一字节（整帧长度）"]
+    D --> E{"未处理字节数 < length ?"}
+    E -- 是 --> R0
+    E -- 否 --> F["sum = 前 length-1 个字节之和"]
+    F --> G{"sum == 第 length 个字节 ?"}
+    G -- 否 --> C1
+    G -- 是 --> H["拷贝 length 字节到 command"]
+    H --> I["readIndex 前进 length"]
+    I --> J["返回 length"]

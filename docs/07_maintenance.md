@@ -15,6 +15,7 @@
 | 串口协议 | `docs/06_uart_protocol.md` | 只给结论 |
 | 官方链接 | `docs/04_official_resources.md` | 目录 README 最多 1–2 条 |
 | 命名、旧名、保留物、许可 | 本文件 | — |
+| 图表 | `docs/assets/diagrams/`（`*.png` + `src/*.mmd`） | 文档里只引用 PNG，不贴图源 |
 | 学习方法与阶段 | `docs/03_learning_roadmap.md` | 根 README 5 行摘要 |
 
 ### 1.2 新增一个目录
@@ -35,7 +36,36 @@
 
 ### 1.5 图的规则
 
-一张图只讲一件事；图上方必须有一句文字摘要（CanMV IDE 和部分 Markdown 阅读器不渲染 Mermaid）；每个节点都要能指到代码行或官方页面原句。画不出来的环节写"仓库内无脚本"，不要补想象。
+- 一张图只讲一件事；每个节点都要能指到代码行或官方页面原句。画不出来的环节写"仓库内无脚本"，不要补想象。
+- **图是 PNG，源是 `.mmd`。** 图片在 `docs/assets/diagrams/*.png`，源在 `src/*.mmd`；改图先改源、再导出，不要直接修 PNG。
+- 每张图上方保留一句文字摘要。图挂了，文字还在 —— 这是给不渲染图片的阅读器留的退路。
+- **为什么不用 Mermaid 内嵌**：GitHub 能渲染，但很多本地 Markdown 阅读器 / IDE 预览只显示代码块，甚至直接报 "Unable to render rich display"。PNG 在哪都能看。
+
+重新导出（需要 Node；第一次运行会下载 Chromium）：
+
+```bash
+cd docs/assets/diagrams
+npx -y @mermaid-js/mermaid-cli -i src/13-2025-pipeline.mmd -o 13-2025-pipeline.png -b "#ffffff" -s 2
+```
+
+| 文件 | 用在 | 讲什么 |
+| --- | --- | --- |
+| `01-system-architecture.png` | 根 README | 主链：镜头 → 采集 → 预处理 → 判据 → 决策 → 输出 |
+| `02-ai-lane.png` | 根 README | AI 支线：采图 → 数据集 → 训练 → 部署 |
+| `03-first-frame.png` | 根 README | 五分钟第一帧 + 停止后再跑的判定 |
+| `04-script-lifecycle.png` | docs/01 | CanMV 脚本生命周期与三个易漏点 |
+| `05-learning-roadmap.png` | docs/03 | 六个学习阶段与最低可用区间 |
+| `06-debug-order.png` | docs/05 | 现场调试顺序 |
+| `07-stm32-parser.png` | docs/06 | STM32 解析器流程 |
+| `08-classification-pipeline.png` | 04 | 数据 → 训练 → 部署 → 推理 |
+| `09-zero-copy.png` | 05 | `cv_lite` 零拷贝与不可达清理 |
+| `10-practice-state-machine.png` | 06 | `01_all_in_one` 状态机 |
+| `11-2023-routes.png` | 2023 | UART 与 PWM 两条路线 |
+| `12-2024-loop.png` | 2024 | 三子棋主循环 |
+| `13-2025-pipeline.png` | 2025 | 识别、稳定判定、打激光 |
+| `14-2025-situation.png` | 2025 | `Situation` 状态机 |
+| `15-laser-drawing.png` | laser_drawing | 画图两阶段 |
+| `16-pc-chain.png` | pc_tools | 串口曲线监控数据链 |
 
 ### 1.6 每次改完跑三条检查
 

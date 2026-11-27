@@ -1,0 +1,11 @@
+flowchart LR
+    A["02_capture_burst.py<br/>按键切类别，每类连拍 100 张"] --> B["data/dataset/one … zero<br/>脚本里是 10 类"]
+    B --> C["板外手工改名 1..8<br/>只保留 8 类，仓库里没有改名脚本"]
+    C --> D["data/dataset/1..8<br/>8 类 × 100 张 = 800 张<br/>480×320 JPEG"]
+    D --> E["嘉楠在线训练平台<br/>仓库里没有训练脚本或记录"]
+    E --> F["导出件：*.kmodel + deploy_config.json<br/>config 不在仓库"]
+    F --> G["拷到 /sdcard/mp_deployment_source/"]
+    G --> H["code/v1.2.2/<br/>手写 ai2d + kpu + softmax"]
+    G --> I["code/v1.3/<br/>libs.PlatTasks.ClassificationApp"]
+    H --> J["OSD 显示 / UART 输出"]
+    I --> J

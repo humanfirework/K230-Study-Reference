@@ -54,53 +54,11 @@
 
 识别与打激光的每帧流程：
 
-```mermaid
-flowchart TD
-    A["snapshot 后转灰度"] --> B["to_grayscale(copy=False)"]
-    B --> C{"上一帧有面积？"}
-    C -- 是 --> C1["get_binary_threshold(area)<br/>三档：小于 5000 / 5000–20000 / 大于 20000"]
-    C -- 否 --> C2["rect_binary_default"]
-    C1 --> D["binary()"]
-    C2 --> D
-    D --> E["find_best_rect()"]
-    E --> F{"检出？"}
-    F -- 是 --> G["中心 / 速度 / 预测点"]
-    G --> H{"距离判据"}
-    H -- "小于 50 px" --> H1["计数 +1"]
-    H -- "大于 100 px" --> H2["计数 -1，不小于 0"]
-    H -- "50–100 px" --> H3["计数 = 1"]
-    H1 --> I{"计数 ≥ 3？"}
-    H2 --> I
-    H3 --> I
-    I -- 是 --> J["更新有效目标"] --> K["发预测点"]
-    I -- 否 --> K
-    K --> L{"对准？"}
-    L -- "小于 30 px" --> L1["GPIO48 拉高"]
-    L -- "否则" --> L2["GPIO48 拉低"]
-    F -- 否 --> M["计数清零，发上一帧预测点<br/>不动 GPIO48"]
-    L1 --> N["show_image"]
-    L2 --> N
-    M --> N
-```
+![2025 的识别、稳定判定与打激光流水线](../../docs/assets/diagrams/13-2025-pipeline.png)
 
 fast / accurate 还有一套 `Situation` 状态机（multi 没有）。串口 `55 01/02/03` 与按键 GPIO53 的切换关系：
 
-```mermaid
-stateDiagram-v2
-    state "0 上电默认，实际在跑识别" as T0
-    state "1 收到开始命令，空操作" as T1
-    state "2 停止，不处理不发帧" as T2
-    state "3 阈值调节界面" as T3
-    [*] --> T0
-    T0 --> T1: 串口 55 01
-    T0 --> T2: 串口 55 02
-    T0 --> T3: 按键 GPIO53 或 串口 55 03
-    T1 --> T2: 串口 55 02
-    T1 --> T3: 按键 或 串口 55 03
-    T2 --> T1: 串口 55 01
-    T2 --> T3: 按键 或 串口 55 03
-    T3 --> T0: 界面返回
-```
+![2025 的 Situation 状态机](../../docs/assets/diagrams/14-2025-situation.png)
 
 ### `iterations/` 与 `error/`
 

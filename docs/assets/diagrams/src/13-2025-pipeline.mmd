@@ -1,0 +1,26 @@
+flowchart TD
+    A["snapshot 后转灰度"] --> B["to_grayscale(copy=False)"]
+    B --> C{"上一帧有面积？"}
+    C -- 是 --> C1["get_binary_threshold(area)<br/>三档：小于 5000 / 5000–20000 / 大于 20000"]
+    C -- 否 --> C2["rect_binary_default"]
+    C1 --> D["binary()"]
+    C2 --> D
+    D --> E["find_best_rect()"]
+    E --> F{"检出？"}
+    F -- 是 --> G["中心 / 速度 / 预测点"]
+    G --> H{"距离判据"}
+    H --> H1["小于 50 px：计数 +1"]
+    H --> H2["大于 100 px：计数 -1，不小于 0"]
+    H --> H3["50–100 px：计数 = 1"]
+    H1 --> I{"计数 ≥ 3？"}
+    H2 --> I
+    H3 --> I
+    I -- 是 --> J["更新有效目标"] --> K["发预测点"]
+    I -- 否 --> K
+    K --> L{"对准？"}
+    L -- "小于 30 px" --> L1["GPIO48 拉高"]
+    L -- "否则" --> L2["GPIO48 拉低"]
+    F -- 否 --> M["计数清零，发上一帧预测点<br/>不动 GPIO48"]
+    L1 --> N["show_image"]
+    L2 --> N
+    M --> N
