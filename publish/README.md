@@ -19,6 +19,8 @@ git push origin v2026.11
 
 ⚠️ 附件是每次现生成的，**正文不是**：发新版前先改 `RELEASE_NOTES.md` 的标题和内容（尤其是“这一版做了什么”和版本号），否则新 release 会沿用上一版的说明。
 
+⚠️ 附件是每次现生成的，**正文不是**：发新版前先改 `RELEASE_NOTES.md` 的标题和内容（尤其是“这一版做了什么”和版本号），否则新 release 会沿用上一版的说明。
+
 ## 附件从哪来
 
 - `nuedc_papers_1994-2026.zip`、`nuedc_paper_index.md`：每次从 `NUEDC_TOPIC-master/真题/` 现生成，不把 42 MB 的包塞进 git。
