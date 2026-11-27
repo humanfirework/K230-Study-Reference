@@ -42,3 +42,6 @@ Release/
 # System
 .DS_Store
 Thumbs.db
+
+# Agent workspace (local notes, not part of the repo)
+.workbuddy/
