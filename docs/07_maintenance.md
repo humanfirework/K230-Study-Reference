@@ -87,7 +87,7 @@ grep -rl "^import cv_lite\|^from cv_lite" --include="*.py" . | wc -l   # 当前 
 | `07_contest/reference/basic_gpio/`、`image_recognition/` 的中文文件名 | 立创/01Studio 教程按这些名字引用 |
 | 亚博工程内部（`2022.ioc`、`bsp_uart.c`、`pid_motor.h` 等） | 第三方便件，改名会让它和亚博教程对不上 |
 
-## 4. 刻意保留的文件（实测后的真实情况）
+## 4. 刻意保留的文件（真实情况）
 
 | 保留物 | 真实情况 | 处理建议 |
 | --- | --- | --- |

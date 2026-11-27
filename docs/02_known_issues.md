@@ -17,7 +17,7 @@
 | **读代码核实** | 结论只依赖语言语义或代码结构（未定义名、参数个数、不可达分支、常量恒真） | 绝大多数 |
 | **待上板确认** | 结论依赖固件行为（星号导入是否带出名字、关键字形参名、资源是否存在、帧率） | 少数 |
 
-⚠️ 旧版文档里"实测""必崩""从来没通过"的说法，都是上一轮**读代码推断**的结果，没有一条上板跑过。本版已全部改标。
+⚠️ 这份清单里没有"实测"这一档：所有结论要么是**读代码核实**，要么是**待上板确认**。凡是没有上板跑过的，都不写成结论。
 
 ### 按症状找
 
@@ -374,6 +374,14 @@ lines = img.find_line_segments(merge_distance=20, max_theta_diff=10)
 
 `02_data_collection/02_capture_burst.py:89` 每次按键都 `os.mkdir(save_folder + class_lst[class_id])`，`class_id` 从 -1 开始按 10 个类别循环。第 11 次按键回到第 1 类，目录已存在 → `OSError`，被外层 `except BaseException` 捕获后程序退出。建议 `try/except OSError: pass`，或在启动时一次性建好 10 个目录。状态：读代码核实，未修。
 
+<a id="p2-19"></a>
+### P2-19 · 2025 三个主程序丢失目标时都不关激光
+
+三个文件的 `LED.value(1/0)` 各只有两处，都在"检出矩形且距中心 < 30 px"的分支里（`main_thresh_ui_fast.py:612,615`、`main_thresh_ui_accurate.py:938,941`、`main_multi_constraint.py:420,423`）。没检出矩形时只清计数、发上一帧预测点，**不操作 GPIO48** —— 上一帧刚把激光打开的话，目标移走后它会一直亮着。
+
+- **建议改法**：在"未检出"分支显式 `LED.value(0)`，或在每帧开头先关、命中再开。
+- **状态**：读代码核实，未修。
+
 ---
 
 ## P3 · 性能、一致性、依赖
@@ -453,7 +461,7 @@ lines = img.find_line_segments(merge_distance=20, max_theta_diff=10)
 | "`compressed_for_ide()` 该把返回值赋回 `img`" | 手册确认它**返回新对象**，所以丢弃返回值的写法确实是空操作。把 JPEG 结果再交给 `Display.show_image` 是否可行需上板确认；这行本来无害 → 保留现状 |
 | "vendor 目录里的中文文件名该一起英文化" | **不要。** 立创和亚博的教程按中文编号引用这些文件，改名会切断与本仓库外部资料的对应关系 |
 | "`variants/k230_basic_variant2.py` 是重复文件，删掉" | 旧名带"副本"，但和 `k230_basic.py` 差 **192 行**（105 增 / 87 删），阈值和 `send_data` 载荷都不同。不是副本 |
-| "`laser_drawing/05_digits_EMPTY.py` 是垃圾，删掉" | 0 字节，从未实现。留着是为了让教程序列上的缺口**可见**，见 [docs/07](07_maintenance.md#4-刻意保留的文件实测后的真实情况) |
+| "`laser_drawing/05_digits_EMPTY.py` 是垃圾，删掉" | 0 字节，从未实现。留着是为了让教程序列上的缺口**可见**，见 [docs/07](07_maintenance.md#4-刻意保留的文件真实情况) |
 
 ---
 

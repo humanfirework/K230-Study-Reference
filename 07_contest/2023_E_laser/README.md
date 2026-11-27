@@ -1,149 +1,104 @@
-# 2023_E_laser — 2023 年 E 题「运动目标控制与自动追踪系统」
+# 2023_E_laser —— 2023 年 E 题「运动目标控制与自动追踪」的视觉端
 
-## 题目要求与本目录的做法
+这一层是 2023 E 题的识别与云台控制代码。题目要求按给定坐标定位激光点、绕铅笔矩形走，并用视觉追踪另一支激光或运动目标；视觉子系统负责找矩形/激光点、做帧间外推，把坐标交给云台。
 
-2023 E 题要求做一个能接收/显示坐标、并驱动激光笔（红或绿）瞄准与追踪运动目标的装置：基础部分要能按给定坐标定位激光点、并绕一个铅笔绘制的矩形轨迹走；发挥部分要求用视觉实时识别另一支激光点（或目标）并做动态追踪，追踪误差以厘米计。
+本目录有两条互不依赖的路线：K230 只做视觉、坐标经 UART 发给 STM32；或 K230 直接用 PWM 驱动舵机云台。两条都能单独成立，读的时候不要混着看。
 
-本目录里有**两条完全不同的技术路线**，别混着看：
+## 这里有什么
 
-1. **UART → STM32 路线（主流程）**：K230 只做视觉，把坐标用串口帧发给一块 STM32，由 STM32 驱动两轴步进电机云台。代表文件 `main_high_fps.py`（400×240 灰度 + `find_blobs` + 一帧速度外推 + 稳定计数 + 发帧）、`k230_full.py`（多状态任务机）、`basic_part.py`（触摸屏离线调阈值 + PID 控制步进电机）。STM32 侧的工程不在这里，在 `../../other_boards/stm32/`。
-2. **PWM 直驱云台路线（`reference_gimbal/`）**：K230 自己用 `PWM` 直接打舵机（X=GPIO42/PWM0，Y=GPIO52/PWM4，50 Hz），不经串口、不管 STM32。这是 LCKFB 例程风格的三条独立程序，适合先单独验证「视觉 → 云台转」这件事能不能通，再切回路线 1。
+| 文件 | 做什么 | 来源 | 状态 |
+|---|---|---|---|
+| `main_high_fps.py`（345 行） | 400×240 灰度，`find_blobs` + 一帧速度外推 + 稳定 3 帧；UART2 发 `AA` … `55` 坐标帧；预测点距屏幕中心 (200,120) 小于 30 px 时拉高 GPIO48 | 本仓库 | 读代码核实 |
+| `k230_full.py`（463 行） | 800×480，三套颜色阈值，多状态任务机（打点 5 点、追踪、绕框） | 本仓库 | 读代码核实；追踪成功分支见 P1-7 |
+| `basic_part.py`（518 行） | 触摸屏离线调 LAB 阈值 + 步进电机 PID；发 `AA AA num dir steps_hi steps_lo sum FF FF` | 第三方教程（bilibili「学不会电磁场」第 14 课） | 读代码核实 |
+| `variants/`（6 个） | 同一基础在不同阶段的存档，不是单变量序列 | 本仓库 | 见下 |
+| `error/`（4 个） | 失败尝试；`error2`/`error3` 语法不过 | 本仓库 | 归档，P0-5 |
+| `reference_gimbal/`（5 个） | K230 直接 PWM 驱动云台（X=GPIO42/PWM0，Y=GPIO52/PWM4，50 Hz），不经串口 | 立创·庐山派例程风格 | 读代码核实 |
+| `sample_code/`（2 个） | 亚博例程，依赖 `ybUtils` | 第三方（亚博） | 缺依赖，跑不起来 |
+| `yahboom_reference/` | 亚博完整方案，含自带 `menu_threshold_ui/` 4 个脚本 | 第三方，Apache-2.0，署名 Kongcheng | 读代码核实；P3-21 |
 
-`variants/` 是同一份基础代码在不同阶段的 6 个存档，`error/` 是 4 次失败尝试，`yahboom_reference/` 是亚博 (Yahboom) K230 方案的完整移植包（含它自己的 STM32 工程，工程部分已挪到 `other_boards/stm32/`）。
+两条路线的分工：
 
-## 题目 PDF
+```mermaid
+flowchart LR
+    subgraph R1["路线 A：K230 只做视觉"]
+        A1["识别矩形 / 激光点"] --> A2["UART2：AA … 55 帧"] --> A3["STM32 解析"] --> A4["云台 / 步进电机"]
+    end
+    subgraph R2["路线 B：K230 直接驱动"]
+        B1["识别"] --> B2["两路 PWM 脉宽"] --> B3["云台舵机"]
+    end
+```
 
-`E题_运动目标控制与自动追踪系统.pdf`（230,727 字节，本目录内，保留原中文名）。
-同一份题面也在 `../../NUEDC_TOPIC-master/真题/2023/`。
+### 路线 A 的基准：`main_high_fps.py`
 
-## 代码文件清单
+这是后面 2025 年三个 main 的直系祖先，也是本目录最适合先读懂的一份：采集固定 400×240 灰度（`:11-12`、`:168`），串口固定 UART2 @115200（`:39`），屏幕中心写死 (200,120)（`:43-44`）。它的稳定判定只看「连续多少帧落在同一个小邻域」，阈值 3（`:55`、`:268`）；预测用的是最便宜的一帧外推（`:244-248`）。出帧为 `AA` + `struct.pack('<BHH', flag, x, y)` + `55`（`:145`、`:151`），flag 区分「未检出」与「检出」。想改判据时，先在这份上改，再去看 `k230_full.py` 的多状态版本。
 
-### 本目录主脚本
+### `k230_full.py`：把流程拆成状态
 
-| 文件 | 行数 | 作用 | 状态 |
-|---|---:|---|---|
-| `main_high_fps.py` | 345 | 帧率优先版：400×240 GRAYSCALE，`find_blobs` 找矩形，一帧速度外推，稳定 3 帧才更新，UART2 发 `AA\|type:B\|x:H\|y:H\|55`，距屏幕中心 (200,120) < 30 px 时 GPIO48 打激光。**2025 年那三个 main 的直系祖先，且状态机写对了** | 可用 |
-| `basic_part.py` | 518 | 触摸屏离线调 LAB 阈值 + PID 控步进电机（`send_order()` 发 `AA AA num dir steps_hi steps_lo sum FF FF`）。开头注明来源：bilibili「学不会电磁场」第 14 课 | 可用 |
-| `k230_full.py` | 463 | 多状态任务机（打点 5 点、追踪、绕框），功能最全但有两处会抛异常的实现错误（见「已知问题」） | **不完整**（有 NameError 与 struct 参数错误） |
+`Situation` 管三档（0 识别、1 开始、2 停止，`:184`、`:252`），`state` 管任务内阶段：先在 `STATE_INITIAL_RESET` 记录 5 个点，再切到 `STATE_DETECT_TARGET`（`:185-223`）。它比 `main_high_fps.py` 多了打点与绕框，但 `Situation == 0` 就干活这一点与 2025 的版本一致，读串口控制时留意。分辨率是 800×480，同一套面积/像素门限在这里要重算，不能从 400×240 直接抄。
 
-### `variants/`（6 个，同一基础的迭代存档）
+### `variants/`：按阶段读，不按文件名读
 
-| 文件 | 行数 | 作用 | 状态 |
-|---|---:|---|---|
-| `k230_basic.py` | 418 | 基础追踪版，发 `AA\|<BHHHH>\|(x,y,x1,y1)\|55`（11 B）与 `AA\|<B10H>\|(5 点)\|55`（23 B）两种帧 | 可用 |
-| `k230_basic_variant2.py` | 436 | ⚠️ **不是 `k230_basic.py` 的副本**（旧名 `K230 基本 - 副本.py` 骗人）。两者 `git diff --no-index --numstat` = **+105 / −87 行**：阈值结构从 `RED_THRESHOLD`（3 个元组的列表）换成单个 `Red_thresholds = (72, 99, -6, 46, -40, 25)`，`find_blobs` 参数与发帧方式（改成 `55 AA 00 xh xl yh yl fa` 合并包）全不一样 | 可用（但与 basic 是两套代码） |
-| `k230_basic_done.py` | 610 | 基础题完成版，发 `55 AA …FA` 单轴 6 字节包 | 可用（尾部有死代码，见下） |
-| `k230_entry.py` | 456 | 初级版（A4 长宽比过滤思路的早期形态） | 可用（尾部有死代码） |
-| `k230_pencil_mark.py` | 506 | 铅笔线框打点版 | 可用（尾部有死代码） |
-| `yedan.py` | 203 | 只做「内外嵌套矩形」检测并 `print` 结果，**完全不用串口**（`uart.write` 出现 0 次）。LCKFB 例程抬头 | 可用（纯调试脚本） |
+| 文件 | 这一版在做什么 |
+|---|---|
+| `k230_entry.py`（456 行） | 早期形态，A4 长宽比过滤的雏形 |
+| `k230_basic.py`（418 行） | 基础追踪，两种帧：单点 11 B 与 5 点 23 B |
+| `k230_basic_variant2.py`（436 行） | 与 `k230_basic.py` 并列的另一套实现：阈值结构与发帧方式都不同 |
+| `k230_basic_done.py`（610 行） | 基础题完成版，`finally:` 之后有死函数（P2-14） |
+| `k230_pencil_mark.py`（506 行） | 铅笔线框打点，同样有尾部死函数（P2-14） |
+| `yedan.py`（203 行） | 只做内外嵌套矩形检测并 `print`，不发串口；立创例程 |
 
-### `error/`（4 次失败尝试）
+### `error/`：四次失败尝试
 
-| 文件 | 行数 | 状态 |
-|---|---:|---|
-| `error1.py` | 189 | 已废弃（能通过语法解析；早期 VIRT/LCD/HDMI 显示分支版） |
-| `error2.py` | 415 | **已废弃：语法就不通过**。`SyntaxError` at line 375 — `print(f"发送数据: 状态={}, X={}, Y={}")` 里是空 `{}`，同行 `uart2.write('!' + str() + ',' + str() + '@')` 的 `str()` 也没传参 |
-| `error3.py` | 397 | **已废弃：语法就不通过**。`SyntaxError` at line 369，同样是空 `{}` + 裸 `str()` |
-| `error4.py` | 522 | 已废弃（能解析；红/绿/激光三阈值版，被 `variants/` 取代） |
-
-### `reference_gimbal/`（5 个，PWM 直驱云台路线，LCKFB 风格）
-
-| 文件 | 行数 | 作用 | 状态 |
-|---|---:|---|---|
-| `main.py` | 770 | 菜单式主程序：KEY1(GPIO27) 复位、KEY2(14) 云台画正方形、KEY3(61) 矢量循迹、KEY4(40) 自动追踪红绿目标、KEY5(46) 暂停/继续 | 可用（**独立架构**，不发 UART 坐标帧） |
-| `advanced_part.py` | 299 | 发挥部分：云台 + 绿色 LED(GPIO) + 蜂鸣器 `PWM(1, …)` | 可用 |
-| `basic_tasks_34.py` | 312 | 基础部分第 3、4 小题 | 可用 |
-| `camera_track_test.py` | 158 | 摄像头追踪单元测试 | 可用 |
-| `gimbal_driver.py` | 125 | 纯舵机驱动演示：X=GPIO42/PWM0，Y=GPIO52/PWM4，50 Hz，脉宽 0.5~2.5 ms，中心 1.6 ms，正方形边长 ±0.1 ms | 可用 |
-
-### `sample_code/`（现只剩 2 个文件）
-
-`get_square.py`(232) 与 `red_light.py`(243) —— 都是亚博例程，**`from ybUtils.YbKey import YbKey` / `YbUart`，本仓库没有 `ybUtils` 包，跑不了**。
-原本这里还有 `green.py`、`red.py` 两个文件，已确认它们是 OpenMV 代码（`from pyb import UART`），在 `28b5f40` 移到了 `../../other_boards/openmv/2023_laser/`。**本目录不再是"缺一半"的状态，是被清出去了。**
-
-### `yahboom_reference/`（亚博 K230 完整方案，第三方）
-
-保留原文件名与 `LICENSE`。Python 端 `get_rect.py`(356) 与 `get_light3.py`(99) 发 `A3/B3 + N×(x_hi,x_lo,y_hi,y_lo) + C3`（**大端**）；`menu_threshold_ui/` 是它的触摸屏菜单阈值工具（5 个文件，`main.py` 88 行、`get_rect_ui.py` 344 行、`change_threshold.py` 192 行、`otherKey.py` 40/27 行）。`ReadMe.txt` 里有作者本人的思路说明，值得一读（特别是"识别不到内框就按外框比例缩放生成内框"这招）。它对应的两个 STM32 工程（`2023 - green`、`2023 - red`）已在 `28b5f40` 移到 `../../other_boards/stm32/yahboom_2023_green/` 与 `_red/`。
-
-⚠️ **`yahboom_reference/menu_threshold_ui/change_threshold.py` 有缺陷**（见「已知问题」）。它是第三方 vendored 代码，**本仓库故意不修改**，只记录。
-
-## 旧名 → 新名
-
-第一次改名：`89e6ffc`（`电赛赛题K230` → `07_contest`，同时英文化子目录与文件名）
-第二次搬家：`28b5f40`（非 K230 代码移出到 `other_boards/`）
-
-| 旧名（`89e6ffc` 之前） | `89e6ffc` 之后 | `28b5f40` 之后（现在） |
+| 文件 | 当时的做法 | 状态 |
 |---|---|---|
-| `电赛赛题K230/02_2023_E_Laser/` | `07_contest/2023_E_laser/` | 同左 |
-| `…/2023年E题基础部分.py` | `…/basic_part.py` | 同左 |
-| `…/K230.py` | `…/k230_full.py` | 同左 |
-| `…/main（高帧率）.py` | `…/main_high_fps.py` | 同左 |
-| `…/ERROR/ERROR1.PY` | `…/error/error1.py` | 同左（`.PY` 大写后缀某些工具链不当 Python 处理，故改小写） |
-| `…/ERROR/ERROR2.py`…`ERROR4.py` | `…/error/error2.py`…`error4.py` | 同左 |
-| `…/参考/main.py` | `…/reference_gimbal/main.py` | 同左 |
-| `…/参考/云台驱动.py` | `…/reference_gimbal/gimbal_driver.py` | 同左 |
-| `…/参考/发挥部分.py` | `…/reference_gimbal/advanced_part.py` | 同左 |
-| `…/参考/基础34题.py` | `…/reference_gimbal/basic_tasks_34.py` | 同左 |
-| `…/参考/摄像头追踪测试代码.py` | `…/reference_gimbal/camera_track_test.py` | 同左 |
-| `…/示例代码/get_square.py` | `…/sample_code/get_square.py` | 同左 |
-| `…/示例代码/red_light.py` | `…/sample_code/red_light.py` | 同左 |
-| `…/示例代码/green.py` | `…/sample_code/green.py` | **`other_boards/openmv/2023_laser/green.py`** |
-| `…/示例代码/red.py` | `…/sample_code/red.py` | **`other_boards/openmv/2023_laser/red.py`** |
-| `…/合集/K230 基本.py` | `…/variants/k230_basic.py` | 同左 |
-| `…/合集/K230 基本 - 副本.py` | `…/variants/k230_basic_variant2.py` | 同左（**它不是副本**） |
-| `…/合集/K230（基础题完成）.py` | `…/variants/k230_basic_done.py` | 同左 |
-| `…/合集/K230 （初级）.py` | `…/variants/k230_entry.py` | 同左 |
-| `…/合集/K230 （铅笔激光标点）.py` | `…/variants/k230_pencil_mark.py` | 同左 |
-| `…/合集/yedan.py` | `…/variants/yedan.py` | 同左 |
-| `…/K230参考/` | `…/yahboom_reference/` | 同左 |
-| `…/K230参考/2023 - green/2023 - green/` | `…/yahboom_reference/2023 - green/2023 - green/` | **`other_boards/stm32/yahboom_2023_green/2023 - green/`** |
-| `…/K230参考/2023 - red/2023 - red/` | `…/yahboom_reference/2023 - red/2023 - red/` | **`other_boards/stm32/yahboom_2023_red/2023 - red/`** |
-| `…/E题_运动目标控制与自动追踪系统.pdf` | 同名（不改） | 同左 |
-| `赛题K230/02_2023_E_Laser/`（最初提交 `f2aa2af`） | — | 仓库根更早叫 `赛题K230/`，`5b4dd92` 才改成 `电赛赛题K230/` |
+| `error1.py`（189 行） | VIRT/LCD/HDMI 三种显示分支的早期版本 | 语法通过，方案被 `variants/` 取代 |
+| `error2.py`（415 行） | 状态 + 坐标的调试打印，f-string 里是空 `{}` | 语法不过，P0-5 |
+| `error3.py`（397 行） | 同 `error2.py` 的另一版 | 语法不过，P0-5 |
+| `error4.py`（522 行） | 红/绿/激光三阈值的完整尝试 | 语法通过，被 `variants/` 取代 |
 
-`yahboom_reference/` 内部（含 `menu_threshold_ui/`）的中文与 `2023 - green` 这类带空格的名字**故意保持原样**：亚博的教程按这些编号称呼文件，改名等于断掉回溯线索。
+### `sample_code/`：亚博例程，缺依赖
 
-## 已知问题（全部实测核对）
+`get_square.py`（232 行）与 `red_light.py`（243 行）都 `from ybUtils.YbKey import YbKey` / `YbUart`（`:5-6`），本仓库没有 `ybUtils` 包，导入即失败。`get_square.py:79` 还引用了未定义的 `light_roi`（P2-16）。这两份适合看流程与按键组织，想真跑要先补亚博的包或自己替换串口/按键封装。
 
-1. **`k230_full.py`：`beep_pwm` 从未实例化 → 追踪成功那一刻 NameError。**
-   文件第 16 行 `from machine import PWM`，但全文没有任何 `PWM(...)` 构造。第 411~414 行却在 `if tracking_complete:` 分支里调 `beep_pwm.freq(1000)` / `beep_pwm.enable(True)` / `.enable(False)`。
-   后果：唯一能"报喜"的路径必炸，异常被第 447 行 `except BaseException as e: print(f"Exception {e}")` 吞掉，只输出一行 `Exception name 'beep_pwm' is not defined`，然后 `finally` 收尾、程序安静退出。**"追踪成功了但机器不动"就是这个**。
+### 路线 B：`reference_gimbal/`
 
-2. **`k230_full.py`：两处 `struct.pack` 参数个数不匹配。**
-   第 59 行 `struct.pack('<BHHHH', 1, x, y)`、第 66 行 `struct.pack('<BHHHH', 2, x, y)` —— 格式要 5 个字段，只传 3 个，实测抛 `struct.error: pack expected 5 items for packing (got 3)`。所以 `send_data()` 与 `send_target_data()` **一旦被调用就异常**；只有 `send_five_points()`（第 84 行 `<B10H` + 11 个实参）是对的。
+`main.py`（770 行）是菜单式主程序：KEY1(GPIO27) 复位、KEY2(GPIO14) 画正方形、KEY3(GPIO61) 矢量循迹、KEY4(GPIO40) 追踪红绿目标、KEY5(GPIO46) 暂停/继续。它自成一套架构，不发坐标帧；`gimbal_driver.py`（125 行）把舵机驱动抽出来，适合先单独验证「视觉 → 云台转」这一段。
 
-3. **`variants/k230_basic_variant2.py` 不是 `k230_basic.py` 的副本。**
-   实测 `git diff --no-index --numstat` = **105 added / 87 removed**（共 192 行差异，文件各 418 / 436 行）。差异不只是格式：阈值数据结构、`find_blobs` 调用、UART 发帧格式全不同（详见上表）。**旧名「- 副本」会让人把它当重复文件删掉，所以改名了 —— 但别按"basic 的备份"来读它。**
+### 第三方件：`yahboom_reference/`
 
-4. **`variants/` 里 3 个文件在 `finally:` 之后还粘着 100+ 行永不执行的函数定义。**
-   `k230_basic_done.py`：`finally:` 在第 510 行，文件 610 行 → 尾部 **100 行**，含 `def laser_track()`（第 527 行）。
-   `k230_entry.py`：`finally:` 在第 290 行，文件 456 行 → 尾部 **166 行**，含 `def laser_rect()`（307）、`def laser_track()`（373）。
-   `k230_pencil_mark.py`：`finally:` 在第 340 行，文件 506 行 → 尾部 **166 行**，含 `def laser_rect()`、`def laser_track()`。
-   核对方法：全文件里 `laser_track` / `laser_rect` **只出现在 `def` 行**，调用次数为 0 —— 它们是**永远不被调用的死代码**。而且因为 `finally` 之后语句仍会被解释器执行到"定义"这一步，读代码的人很容易误以为它们生效了（"绕框""追踪"功能其实并没有接上）。
+`get_rect.py`（356 行）与 `get_light3.py`（99 行）发 `A3`/`B3` 大端帧；`menu_threshold_ui/` 是它的触摸菜单阈值工具，四个脚本分工如下。
 
-5. **`error/error2.py`(line 375) 与 `error/error3.py`(line 369) 不能通过语法解析。**
-   两处都是 `print(f"发送数据: 状态={}, X={}, Y={}")` —— f-string 里写空 `{}`；紧邻上一行 `uart2.write('!' + str() + ',' + str() + '@')` 的 `str()` 也没实参，即使能解析也只会送出 `!,@`。这两个文件**连 import 都做不到**，只能当文字材料看。
+| 文件 | 行数 | 做什么 |
+|---|---:|---|
+| `main.py` | 88 | 菜单入口与页面切换 |
+| `get_rect_ui.py` | 344 | 识别矩形并在屏幕上画框的界面 |
+| `change_threshold.py` | 192 | 三组 LAB 阈值的滑块调节与保存；会忽略调用方传入的阈值（[P3-21](../../docs/02_known_issues.md#p3-21)） |
+| `otherKey.py` | 40 | 按键扫描 |
 
-6. **`yahboom_reference/menu_threshold_ui/change_threshold.py`（第三方，不修改）：调用方传进来的阈值一定被忽略。**
-   第 9 行签名 `def run_threshold_ui(sensor, tp, key, key_esc, thresholds, WIDTH=640, HEIGHT=480):`；第 12 行 `original_thresholds = [row[:] for row in thresholds]` 刚把入参备份好，第 14~17 行立刻 `thresholds = [[0,100,-128,127,-128,127], [0,100,-128,127,-128,127]]` 用硬编码默认值把局部名重新绑定。
-   于是界面上显示的永远是全量程默认值，而不是你辛苦调好的那组。
-   **本仓库不修改它**：它是 vendored 的厂商代码，改了就和亚博教程对不上号。要用这套菜单，自己抄一份改，或直接把入参当唯一来源重写。
+本仓库把它当 vendored 代码保留，不修改；要用这套菜单，先自己抄一份再改。
 
-## 练习建议
+## 能不能跑
 
-1. **先修 `k230_full.py` 的两处崩溃，用「改前 / 改后」验证你真的定位对了**
-   要求：不重写文件，只补 `beep_pwm` 的构造（参考同仓库 `reference_gimbal/advanced_part.py:157` 的 `PWM(1, BEEP_FREQ, BEEP_DUTY, enable=False)` 写法）和第 59/66 行的 `struct.pack` 实参。
-   **通过标准**：把第 447 行的 `print(f"Exception {e}")` 换成 `sys.print_exception(e)` 临时打印栈，跑一次完整追踪流程，**输出里既没有 `NameError` 也没有 `struct.error`**；然后改回原打印方式，并把你只动了哪几行记在 commit message 里。（不许动 `.py` 之外的行为，也不许顺手"优化"别的地方。）
+没有一份经过上板验证，以下均为读代码核实：
 
-2. **量帧率，而不是看"画面在动"**
-   `main_high_fps.py` 的 `picture_width/height = 400/240`、`DISPLAY` 是 ST7701 800×480；`reference_gimbal/main.py` 用 `Display.VIRT`/`ST7701` 的组合不同，帧率必然不同。
-   任务：在**同一目标、同一光照**下，分别记录 `main_high_fps.py`、`k230_basic.py`、`k230_basic_done.py` 三个脚本屏幕上打印的 FPS（连续 30 次采样），列成表，写清各自掉了多少。再对 `main_high_fps.py` 把 `TARGET_STABILITY_THRESHOLD`（第 61 行，当前 3）改成 3 和 6，各测 20 次追踪，记录「从目标进入视野到第一帧发坐标」的帧数。
-   **通过标准**：交出一张「脚本 × FPS(均值/最小)」「阈值 × 首帧延迟(中位/最大)」的实测表，数字来自屏幕或串口打印，不许写"感觉流畅"。
+- `k230_full.py`：`:411-414` 的 `beep_pwm` 与 `:359` 的 `Red_thresholds` 未定义，追踪成功那一刻抛 `NameError`；`:59`、`:66` 的 `struct.pack('<BHHHH', …)` 只给了 3 个实参。→ [P1-7](../../docs/02_known_issues.md#p1-7)、[P0-2](../../docs/02_known_issues.md#p0-2)
+- `variants/`：3 个文件在 `finally:` 之后有 100–166 行死函数，另有 5 处未定义名。→ [P2-14](../../docs/02_known_issues.md#p2-14)、[P2-16](../../docs/02_known_issues.md#p2-16)
+- `error/error2.py`、`error/error3.py`：语法不过，只能当文字材料。→ [P0-5](../../docs/02_known_issues.md#p0-5)
 
-3. **证明 `variants/k230_basic_variant2.py` 与 `k230_basic.py` 不是同一份代码**
-   不许打开编辑器对比着读，必须用命令：`git diff --no-index --numstat variants/k230_basic.py variants/k230_basic_variant2.py` 与 `diff … | wc -l`。
-   **通过标准**：报告里给出实测的增删行数（本次核对结果是 **+105 / −87**），并能说出**至少三处实质差异**（阈值数据结构、`find_blobs` 实参、UART 发帧格式各算一处），并解释为什么"是副本"这个旧文件名会让人误删。
+## 练习
 
-4. **（选做，跨到 `other_boards/`）把亚博那对能自洽的协议跑通一次**
-   本目录唯一自洽的收发对是 `yahboom_reference/get_rect.py` ↔ `../../other_boards/stm32/yahboom_2023_red/2023 - red/dsp/bsp_uart.c`（`A3 + x_hi,x_lo,y_hi,y_lo + C3`，**大端**）。
-   **通过标准**：STM32 串口助手上抓到 6 字节且 `RxBuffer[5] == 0xC3`（该工程第 42 行就是这个判据），并亲手验证一次：把你 K230 端换成 `struct.pack('<HH', x, y)`（小端）后，STM32 解析出的坐标会错成什么值。**这道题的目的就是让你记住本仓库有大小端两套约定**，见 [`../README.md`](../README.md) 的协议表。
+1. **先写方案，再对照代码。** 只读题面 PDF，写下你会怎么分视觉与控制、用什么帧格式。完成标准：列出至少 5 条设计选择，每条指到本目录一个文件或 [docs/06](../../docs/06_uart_protocol.md) 的一条约定；与两条路线不一致的地方写明理由。
+
+2. **三个主脚本各跑一遍，比较帧率与鲁棒性。** 同一目标、同一光照下，记录 `main_high_fps.py`、`k230_full.py`、`basic_part.py` 的屏幕 FPS 与丢失目标次数。完成标准：交出一张三行表；未上板就在每格写「未验证」，不要填估计值。
+
+3. **修 `beep_pwm` 之前先确认蜂鸣器引脚。** 先在原理图或立创官方资料里找到蜂鸣器对应的 GPIO/PWM 通道。完成标准：写明引脚号与出处；找不到就写「未核实」并停手——不要猜通道（见 P1-7）。
+
+4. **把 `variants/` 当阶段存档读。** 按代码实际内容判断先后与并列，而不是按文件名。完成标准：每个文件一句话说明「这一版新增或放弃了什么」，指向具体函数或常量；能指出哪两版是并列分支而非先后关系。
+
+5. **抓一帧看字节序。** 用 USB-TTL 接 UART2，跑 `main_high_fps.py`，记录检出与未检出各一帧的原始字节。完成标准：能指出 `AA`、`55`、flag、x/y 的位置与字节序，并与 [docs/06](../../docs/06_uart_protocol.md) 的约定逐项对照；未上板就写「未验证」，不要凭代码推一个「应该」的字节序列当结果。
+
+## 相关
+
+- 题面：`E题_运动目标控制与自动追踪系统.pdf`；同一份在 `../../NUEDC_TOPIC-master/真题/2023/`。
+- 缺陷与状态：[docs/02](../../docs/02_known_issues.md)；串口帧：[docs/06](../../docs/06_uart_protocol.md)；学习路线：[docs/03](../../docs/03_learning_roadmap.md)。

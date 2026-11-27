@@ -68,7 +68,7 @@
 
 它的 API 讲解比嘉楠参考手册更入门；示例按"机器视觉 / 图像处理"分类组织。
 
-⚠️ **出处要分清**：本仓库 `03_ai_demos/` 的 18 个文件里，**17 个来自庐山派 wiki 的 AI Demo 页，只有 `05_object_tracking.py` 来自 01Studio**（文件头写着"实验平台：01Studio CanMV K230"）。旧版文档说"18 个都抄自 01Studio"，是错的。
+⚠️ **出处要分清**：本仓库 `03_ai_demos/` 的 18 个文件里，**17 个来自庐山派 wiki 的 AI Demo 页，只有 `05_object_tracking.py` 来自 01Studio**（文件头写着"实验平台：01Studio CanMV K230"）。
 
 ### [亚博（Yahboom）K230 学习资料](https://www.yahboom.com/study/K230)
 
@@ -103,7 +103,7 @@
 
 `NUEDC_TOPIC-master/`（已随仓库纳入版本控制）：1994–2026 的电赛题目原文，**150 个 PDF = 真题 136 + 综合测评 12 + 参考资料 2**。另有 Multisim/Matlab 模型和两本 TI 手册。离线可用，赛场没网时是唯一的题目原文来源。
 
-⚠️ 旧版文档说"150 个 PDF 全是真题"、"该目录有 MIT LICENSE" —— 两条都不准确：目录里**没有 LICENSE 文件**（见 [docs/07](07_maintenance.md#7-许可与出处)）。
+⚠️ 这 150 个 PDF 里，真题只有 136 个；该目录**没有 LICENSE 文件**（见 [docs/07](07_maintenance.md#7-许可与出处)）。
 
 ---
 
