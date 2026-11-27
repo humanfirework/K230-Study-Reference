@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "release" / "out"
+OUT = ROOT / "publish" / "out"
 OUT.mkdir(parents=True, exist_ok=True)
 
 SRC = ROOT / "NUEDC_TOPIC-master" / "真题"

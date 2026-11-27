@@ -26,7 +26,9 @@ jobs:
           python-version: "3.12"
 
       - name: Build release assets
-        run: python publish/build_assets.py
+        run: |
+          python publish/build_assets.py
+          ls -lh publish/out
 
       - name: Publish
         uses: softprops/action-gh-release@v2
