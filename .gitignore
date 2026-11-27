@@ -45,3 +45,6 @@ Thumbs.db
 
 # Agent workspace (local notes, not part of the repo)
 .workbuddy/
+
+# Release build output (generated in CI, never committed)
+publish/out/

@@ -1,0 +1,43 @@
+name: Publish release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v2026.11)"
+        required: true
+        default: "v2026.11"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build release assets
+        run: python publish/build_assets.py
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: "K230 电赛视觉资料库 · ${{ inputs.tag || github.ref_name }}"
+          body_path: publish/RELEASE_NOTES.md
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            publish/out/nuedc_papers_1994-2026.zip
+            publish/out/nuedc_paper_index.md
+            publish/out/checklist_A4.pdf
+            publish/out/2025_E_self_aiming.zip
