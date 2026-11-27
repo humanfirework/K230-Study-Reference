@@ -30,7 +30,7 @@ try:
     KEY = Pin(53, Pin.IN, Pin.PULL_DOWN)
     uart2 = UART(UART.UART2, 115200)
 
-    sensor = Sensor(wihth = picture_width, height = picture_height, id = sensor_id)
+    sensor = Sensor(width = picture_width, height = picture_height, id = sensor_id)
     sensor.reset()
 
     sensor.set_framesize(width = 800, height = 480)

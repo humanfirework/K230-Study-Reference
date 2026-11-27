@@ -10,7 +10,7 @@ sensor = None
 try:
     print("camera_test")
     # 构造一个具有默认配置的摄像头对象
-    sensor = Sensor(channe = sensor_id)
+    sensor = Sensor(id = sensor_id)
     # 重置摄像头sensor
     sensor.reset()
 
